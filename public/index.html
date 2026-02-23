@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎮 Minecraft TikTok Bridge</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #00d4ff;
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .card h2 {
+            color: #ff6b6b;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card h2.tiktok {
+            color: #ff0050;
+        }
+
+        .card h2.minecraft {
+            color: #00d4ff;
+        }
+
+        .card h2.actions {
+            color: #ffd93d;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .status.connected {
+            background: #00d4ff;
+            color: #000;
+        }
+
+        .status.disconnected {
+            background: #ff6b6b;
+            color: #fff;
+        }
+
+        input,
+        select,
+        textarea,
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.3);
+            color: #fff;
+            font-size: 14px;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #00d4ff;
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+        }
+
+        button {
+            background: linear-gradient(135deg, #00d4ff 0%, #0077b6 100%);
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
+        }
+
+        button.danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #c92a2a 100%);
+        }
+
+        button.danger:hover {
+            box-shadow: 0 5px 20px rgba(255, 107, 107, 0.4);
+        }
+
+        button.success {
+            background: linear-gradient(135deg, #51cf66 0%, #2b8a3e 100%);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+            font-family: 'Courier New', monospace;
+        }
+
+        .actions-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .action-item {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid #ffd93d;
+        }
+
+        .action-item .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .action-item .type {
+            background: #ffd93d;
+            color: #000;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .action-item .trigger {
+            color: #adb5bd;
+            font-size: 0.9rem;
+        }
+
+        .action-item .command {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #51cf66;
+            word-break: break-all;
+        }
+
+        .delete-btn {
+            background: #ff6b6b;
+            color: #fff;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .save-btn {
+            background: #51cf66;
+            color: #000;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+
+        .save-btn:hover {
+            background: #40c057;
+        }
+
+
+        .help-text {
+            color: #868e96;
+            font-size: 0.85rem;
+            margin-top: 5px;
+        }
+
+        .log-box {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 3px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .log-entry.gift {
+            color: #ff6b6b;
+        }
+
+        .log-entry.comment {
+            color: #74c0fc;
+        }
+
+        .log-entry.like {
+            color: #ff6b9d;
+        }
+
+        .log-entry.follow {
+            color: #51cf66;
+        }
+
+        .log-entry.system {
+            color: #ffd93d;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .row-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+        }
+
+        @media (max-width: 600px) {
+
+            .row,
+            .row-3 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+
+        .code-editor {
+            width: 100%;
+            min-height: 140px;
+            max-height: 260px;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(0, 0, 0, 0.75);
+            color: #e9ecef;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            white-space: pre;
+            overflow-x: auto;
+            overflow-y: auto;
+            resize: vertical;
+        }
+
+        .code-editor:focus {
+            outline: none;
+            border-color: #00d4ff;
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
+        }
+
+        .code-editor-small {
+            min-height: 100px;
+            max-height: 200px;
+            font-size: 12px;
+        }
+
+        /* Para que las cards de “código” se vean un poco distintas (opcional) */
+        .card.code-card {
+            border-left: 3px solid #00d4ff;
+        }
+
+        .action-type-select {
+            background: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .action-type-select:focus {
+            outline: none;
+            border-color: #ffd93d;
+        }
+
+        .action-trigger-input {
+            background: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+        }
+
+        .action-trigger-input:focus {
+            outline: none;
+            border-color: #ffd93d;
+            box-shadow: 0 0 8px rgba(255, 217, 61, 0.3);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🎮 Minecraft TikTok Bridge</h1>
+
+        <div class="grid">
+            <!-- Configuración RCON -->
+            <div class="card">
+                <h2 class="minecraft">🔌 Configuración RCON</h2>
+                <div class="row">
+                    <div>
+                        <label>Estado:</label>
+                        <span id="rconStatus" class=" status disconnected">Desconectado</span>
+                    </div>
+                    <button onclick="testConnection()">🧪 Test</button>
+                </div>
+
+                <input id="rconHost" placeholder="IP del servidor (ej: 149.130.166.152)">
+                <div class="row">
+                    <input id="rconPort" type="number" placeholder="Puerto (25575)" value="25575">
+                    <input id="rconPassword" type="password" placeholder="Contraseña RCON">
+                </div>
+
+                <div class="row">
+                    <button onclick="saveRconConfig()">💾 Guardar</button>
+                    <button onclick="connectRcon()" id="btnConnect">🔌 Conectar</button>
+                </div>
+                <button class="danger" onclick="disconnectRcon()">🔌 Desconectar</button>
+
+
+            </div>
+
+            <div class="card">
+                <h2 class="minecraft">🧪 Comando de prueba</h2>
+
+                <p class="help-text">
+                    Escribe aquí cualquier comando RCON de Minecraft. Se enviará tal cual al servidor.
+                </p>
+
+                <textarea id="testCommand" class="code-editor" spellcheck="false"
+                    placeholder='say hola tellraw @a {"text":"Hola TikTok!","color":"gold"}'>
+                </textarea>
+
+                <button onclick="sendTestCommand()">▶️ Enviar comando</button>
+            </div>
+
+
+            <!-- Configuración TikTok -->
+            <div class="card">
+                <h2 class="tiktok">📱 TikTok LIVE</h2>
+                <div class="row">
+                    <div>
+                        <label>Estado:</label>
+                        <span id="tiktokStatus" class="status disconnected">Detenido</span>
+                    </div>
+                </div>
+
+                <input id="tiktokUsername" placeholder="Usuario de TikTok (sin @)">
+
+                <div class="row">
+                    <button class="success" onclick="startTikTok()">▶️ Iniciar</button>
+                    <button onclick="resetStats()">♻️ Reset Stats</button>
+                    <button class="danger" onclick="stopTikTok()">⏹️ Detener</button>
+                </div>
+
+                <div class="help-text">
+                    El usuario debe estar en vivo (LIVE) para que funcione.
+                </div>
+
+                <h3 style="margin-top: 20px; color: #868e96; font-size: 0.9rem;">Eventos recientes:</h3>
+                <div id="eventLog" class="log-box">
+                    <div class="log-entry system">Sistema iniciado...</div>
+                </div>
+            </div>
+
+            <!-- Configuración Minecraft -->
+            <div class="card">
+                <h2 class="minecraft">⛏️ Minecraft</h2>
+                <label>Nombre del jugador (para comandos):</label>
+                <input id="playerName" placeholder="Tu Nombre o Vacio para todos los jugadores">
+                <button onclick="savePlayerConfig()">💾 Guardar</button>
+
+                <div class="help-text">
+                    Variables disponibles en comandos:<br>
+                    <code>{{username}}</code> - Usuario de TikTok<br>
+                    <code>{{nickname}}</code> - Apodo en TikTok<br>
+                    <code>{{giftname}}</code> - Nombre del regalo<br>
+                    <code>{{repeatcount}}</code> - Cantidad de regalos enviados en este evento<br>
+                    <code>{{likecount}}</code> - Cantidad de likes en este batch<br>
+                    <code>{{comment}}</code> - Texto del comentario<br>
+                    <code>{{playername}}</code> - Tu jugador en Minecraft<br>
+                    <code>{{diamondcount}}</code> - Valor en diamantes del regalo<br>
+                    <br>
+                    Contadores acumulados:<br>
+                    <code>{{totallikes}}</code> - Total de likes recibidos<br>
+                    <code>{{totalcomments}}</code> - Total de comentarios<br>
+                    <code>{{totalfollows}}</code> - Total de nuevos seguidores<br>
+                    <code>{{totalgifts}}</code> - Total de regalos recibidos<br>
+                    <code>{{totaldiamonds}}</code> - Total de diamantes gastados por los viewers<br>
+                    <code>{{userlikes}}</code> - Likes que ha dado ESTE usuario<br>
+                    <code>{{usercomments}}</code> - Comentarios que ha hecho ESTE usuario<br>
+                    <code>{{usergifts}}</code> - Regalos que ha enviado ESTE usuario<br>
+                    <code>{{userfollows}}</code> - Si este usuario siguió (1 = sí, 0 = no)
+                </div>
+            </div>
+
+            <!-- Crear Acción -->
+            <div class="card">
+                <h2 class="actions">⚡ Crear Acción</h2>
+
+                <label>Tipo de evento:</label>
+                <select id="actionType" onchange="updateTriggerLabel()">
+                    <option value="gift">🎁 Regalo</option>
+                    <option value="comment">💬 Comentario</option>
+                    <option value="like">❤️ Like</option>
+                    <option value="follow">➕ Seguir</option>
+                </select>
+
+                <label id="triggerLabel">Nombre del regalo:</label>
+                <input id="actionTrigger" placeholder="ej: Rose, TikTok, Galaxy">
+                <p class="help-text" id="triggerHelp">Dejar vacío para cualquier regalo</p>
+
+                <label>Comando Minecraft:</label>
+                <textarea id="actionCommand" class="code-editor" spellcheck="false"
+                    placeholder='/title {{playername}} subtitle {"text":"{{username}}","color":"gold"}'>
+</textarea>
+                <p class="help-text">Ejemplo: <code>/say {{username}} envió {{giftname}}!</code></p>
+
+                <button onclick="addAction()">➕ Agregar Acción</button>
+            </div>
+
+            <!-- Lista de Acciones -->
+            <div class="card code-card" style="grid-column: 1 / -1;">
+                <h2 class="actions">📋 Acciones Configuradas</h2>
+                <div id="actionsList" class="actions-list"></div>
+
+
+                <p style="color: #868e96; text-align: center;">No hay acciones configuradas</p>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <script>
+        // ========================
+        // ESTADO
+        // ========================
+        let config = {};
+        let actions = [];
+
+        // ========================
+        // INICIALIZACIÓN
+        // ========================
+        async function init() {
+            await loadConfig();
+            await loadActions();
+            await updateStatus();
+
+            // Actualizar estado cada 5 segundos
+            setInterval(updateStatus, 5000);
+        }
+
+        // ========================
+        // API CALLS
+        // ========================
+        async function apiGet(endpoint) {
+            const res = await fetch(`/api${endpoint}`);
+            return res.json();
+        }
+
+        async function apiPost(endpoint, data) {
+            const res = await fetch(`/api${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            return res.json();
+        }
+
+
+
+
+        // ========================
+        // CONFIGURACIÓN
+        // ========================
+        async function loadConfig() {
+            const data = await apiGet('/config');
+            config = data;
+
+            document.getElementById('rconHost').value = data.rcon?.host || '';
+            document.getElementById('rconPort').value = data.rcon?.port || 25575;
+            document.getElementById('rconPassword').value = data.rcon?.password || '';
+            document.getElementById('tiktokUsername').value = data.tiktok?.username || '';
+            document.getElementById('playerName').value = data.minecraft?.playername || '';
+        }
+
+        async function saveRconConfig() {
+            const newConfig = {
+                ...config,
+                rcon: {
+                    host: document.getElementById('rconHost').value,
+                    port: parseInt(document.getElementById('rconPort').value),
+                    password: document.getElementById('rconPassword').value
+                }
+            };
+
+            const res = await apiPost('/config', newConfig);
+            if (res.success) {
+                config = newConfig;
+                log('system', 'Configuración RCON guardada');
+                alert('✅ Configuración guardada');
+            }
+        }
+
+        async function savePlayerConfig() {
+            const newConfig = {
+                ...config,
+                minecraft: {
+                    playername: document.getElementById('playerName').value
+                }
+            };
+
+            const res = await apiPost('/config', newConfig);
+            if (res.success) {
+                config = newConfig;
+                log('system', 'Configuración Minecraft guardada');
+                alert('✅ Jugador guardado');
+            }
+        }
+
+        // ========================
+        // RCON
+        // ========================
+        async function connectRcon() {
+            await saveRconConfig();
+            const res = await apiPost('/rcon/connect', {});
+
+            if (res.success) {
+                log('system', 'RCON conectado correctamente');
+            } else {
+                alert('❌ Error conectando RCON');
+            }
+            await updateStatus();
+        }
+
+        async function disconnectRcon() {
+            await apiPost('/rcon/disconnect', {});
+            log('system', 'RCON desconectado');
+            await updateStatus();
+        }
+
+        async function testConnection() {
+            const res = await apiPost('/rcon/test', {});
+            if (res.success) {
+                alert('✅ Conexión OK! Respuesta: ' + res.response);
+            } else {
+                alert('❌ Error: ' + (res.error || 'No conectado'));
+            }
+        }
+
+        async function sendTestCommand() {
+            const command = document.getElementById('testCommand').value;
+            if (!command) return;
+
+            const res = await apiPost('/rcon/command', { command });
+            if (res.success) {
+                log('system', `Comando enviado: ${command}`);
+                document.getElementById('testCommand').value = '';
+            } else {
+                alert('❌ Error: ' + res.error);
+            }
+        }
+
+        // ========================
+        // TIKTOK
+        // ========================
+        async function startTikTok() {
+            const username = document.getElementById('tiktokUsername').value.trim();
+            if (!username) {
+                alert('❌ Ingresa un usuario de TikTok');
+                return;
+            }
+
+            const res = await apiPost('/tiktok/start', { username });
+            if (res.success) {
+                log('system', `Conectando a LIVE de ${username}...`);
+            }
+            await updateStatus();
+        }
+
+        async function stopTikTok() {
+            await apiPost('/tiktok/stop', {});
+            log('system', 'TikTok detenido');
+            await updateStatus();
+        }
+
+        // ========================
+        // ACCIONES
+        // ========================
+        function updateTriggerLabel() {
+            const type = document.getElementById('actionType').value;
+            const label = document.getElementById('triggerLabel');
+            const help = document.getElementById('triggerHelp');
+
+            switch (type) {
+                case 'gift':
+                    label.textContent = 'Nombre del regalo:';
+                    help.textContent = 'ej: Rose, TikTok, Galaxy, Coffee (dejar vacío para cualquiera)';
+                    break;
+                case 'comment':
+                    label.textContent = 'Texto a detectar:';
+                    help.textContent = 'ej: "hola", "tnt" (dejar vacío para cualquier comentario)';
+                    break;
+                case 'like':
+                    label.textContent = 'Cantidad mínima (opcional):';
+                    help.textContent = 'ej: 10 (ejecutar cada 10 likes)';
+                    break;
+                case 'follow':
+                    label.textContent = 'No requiere configuración';
+                    help.textContent = 'Se ejecuta en cada nuevo seguidor';
+                    break;
+            }
+        }
+
+        async function loadActions() {
+            actions = await apiGet('/actions');
+            renderActions();
+        }
+
+        function renderActions() {
+            const container = document.getElementById('actionsList');
+
+            if (actions.length === 0) {
+                container.innerHTML = '<p style="color: #868e96; text-align: center;">No hay acciones configuradas</p>';
+                return;
+            }
+
+            container.innerHTML = actions.map((action, index) => {
+                // Formatear el comando: separar por ; y mostrar cada uno en línea nueva
+                const formattedCommand = formatCommandForDisplay(action.command);
+
+                return `
+        <div class="action-item" data-index="${index}">
+            <div class="row-3" style="margin-bottom: 10px;">
+                <div>
+                    <label style="color: #868e96; font-size: 0.75rem;">Tipo:</label>
+                    <select class="action-type-select" onchange="onActionTypeChange(${index}, this.value)" style="width: 100%; padding: 6px; font-size: 0.85rem;">
+                        <option value="gift" ${action.type === 'gift' ? 'selected' : ''}>🎁 Regalo</option>
+                        <option value="comment" ${action.type === 'comment' ? 'selected' : ''}>💬 Comentario</option>
+                        <option value="like" ${action.type === 'like' ? 'selected' : ''}>❤️ Like</option>
+                        <option value="follow" ${action.type === 'follow' ? 'selected' : ''}>➕ Seguir</option>
+                    </select>
+                </div>
+                <div style="grid-column: span 2;">
+                    <label style="color: #868e96; font-size: 0.75rem;">Trigger:</label>
+                    <input type="text" 
+                           class="action-trigger-input" 
+                           value="${escapeHtml(action.trigger || '')}" 
+                           placeholder="ej: Rose, hola, 10"
+                           oninput="onActionTriggerChange(${index}, this.value)"
+                           style="width: 100%; padding: 6px; font-size: 0.85rem;">
+                </div>
+            </div>
+            
+            <label style="color: #868e96; font-size: 0.75rem;">Comando:</label>
+            <textarea
+                class="code-editor code-editor-small"
+                spellcheck="false"
+                oninput="onActionCommandChange(${index}, this.value)"
+            >${formattedCommand}</textarea>
+            
+            <div style="margin-top: 10px; display: flex; justify-content: flex-end; gap: 10px;">
+                <button class="save-btn" onclick="saveAction(${index})">💾 Guardar cambios</button>
+                <button class="delete-btn" onclick="deleteAction(${index})">🗑️ Eliminar</button>
+            </div>
+        </div>
+    `}).join('');
+        }
+
+        // Función para formatear el comando en líneas separadas
+        function formatCommandForDisplay(command) {
+            if (!command) return '';
+
+            // Si ya tiene saltos de línea, devolverlo tal cual
+            if (command.includes('\n')) return command;
+
+            // Separar por punto y coma, limpiar espacios y unir con saltos de línea
+            return command
+                .split(';')
+                .map(cmd => cmd.trim())
+                .filter(cmd => cmd.length > 0)
+                .join(';\n') + ';';
+        }
+
+        // Manejar cambios en el tipo
+        function onActionTypeChange(index, value) {
+            actions[index].type = value;
+        }
+
+        // Manejar cambios en el trigger
+        function onActionTriggerChange(index, value) {
+            actions[index].trigger = value.trim();
+        }
+
+        // Manejar cambios en el comando
+        function onActionCommandChange(index, value) {
+            actions[index].command = value;
+        }
+
+        async function saveAction(index) {
+            const action = actions[index];
+
+            // Normalizar el comando: quitar saltos de línea extra y asegurar que termine en ; si hay múltiples
+            action.command = action.command
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0)
+                .join(' ');
+
+            try {
+                // Primero intentar PUT si existe, sino usar el truco de borrar y recrear
+                const res = await fetch(`/api/actions/${index}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(action)
+                });
+
+                // Si PUT no existe (404), usar POST con replace
+                if (res.status === 404) {
+                    // Borrar la acción actual
+                    await fetch(`/api/actions/${index}`, { method: 'DELETE' });
+                    // Crear nueva acción
+                    const createRes = await apiPost('/actions', action);
+                    if (createRes.success) {
+                        await loadActions();
+                        log('system', `Acción #${index} actualizada`);
+                        alert('✅ Acción actualizada');
+                    }
+                } else {
+                    const data = await res.json();
+                    if (data.success) {
+                        await loadActions();
+                        log('system', `Acción #${index} guardada`);
+                        alert('✅ Cambios guardados');
+                    } else {
+                        alert('❌ Error: ' + (data.error || 'Desconocido'));
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+                alert('❌ Error de red');
+            }
+        }
+
+
+        function onActionCommandChange(index, value) {
+            actions[index].command = value;
+        }
+
+        async function saveAction(index) {
+            const action = actions[index];
+
+            try {
+                const res = await apiPost(`/actions/${index}`, action);
+
+                if (res.success) {
+                    log('system', `Acción #${index} actualizada`);
+                    alert('✅ Acción actualizada');
+                    await loadActions();
+                } else {
+                    alert('❌ Error actualizando acción: ' + (res.error || 'Desconocido'));
+                }
+            } catch (err) {
+                console.error(err);
+                alert('❌ Error de red actualizando acción');
+            }
+        }
+
+
+        async function addAction() {
+            const type = document.getElementById('actionType').value;
+            const trigger = document.getElementById('actionTrigger').value.trim();
+            const command = document.getElementById('actionCommand').value.trim();
+
+            if (!command) {
+                alert('❌ El comando es requerido');
+                return;
+            }
+
+            const newAction = { type, trigger, command };
+            const res = await apiPost('/actions', newAction);
+
+            if (res.success) {
+                actions.push(newAction);
+                renderActions();
+
+                // Limpiar formulario
+                document.getElementById('actionTrigger').value = '';
+                document.getElementById('actionCommand').value = '';
+
+                log('system', `Nueva acción agregada: ${type}`);
+            }
+        }
+
+        async function deleteAction(index) {
+            if (!confirm('¿Eliminar esta acción?')) return;
+
+            const res = await fetch(`/api/actions/${index}`, {
+                method: 'DELETE'
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                actions.splice(index, 1);
+                renderActions();
+                log('system', 'Acción eliminada');
+            }
+        }
+
+        // ========================
+        // UTILIDADES
+        // ========================
+        async function updateStatus() {
+            try {
+                const status = await apiGet('/status');
+
+                // Actualizar estado RCON
+                const rconStatus = document.getElementById('rconStatus');
+                if (status.rcon) {
+                    rconStatus.textContent = 'Conectado';
+                    rconStatus.className = 'status connected';
+                    document.getElementById('btnConnect').disabled = true;
+                } else {
+                    rconStatus.textContent = 'Desconectado';
+                    rconStatus.className = 'status disconnected';
+                    document.getElementById('btnConnect').disabled = false;
+                }
+
+                // Actualizar estado TikTok
+                const tiktokStatus = document.getElementById('tiktokStatus');
+                if (status.tiktok) {
+                    tiktokStatus.textContent = 'Conectado';
+                    tiktokStatus.className = 'status connected';
+                } else {
+                    tiktokStatus.textContent = 'Detenido';
+                    tiktokStatus.className = 'status disconnected';
+                }
+
+            } catch (err) {
+                console.error('Error obteniendo estado:', err);
+            }
+        }
+
+        function log(type, message) {
+            const logBox = document.getElementById('eventLog');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const time = new Date().toLocaleTimeString();
+            entry.textContent = `[${time}] ${message}`;
+
+            logBox.insertBefore(entry, logBox.firstChild);
+
+            // Mantener solo últimos 50 logs
+            while (logBox.children.length > 50) {
+                logBox.removeChild(logBox.lastChild);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function resetStats() {
+            if (!confirm('¿Reiniciar TODAS las estadísticas?')) return;
+            const res = await apiPost('/stats/reset', {});
+            if (res.success) {
+                log('system', 'Estadísticas reseteadas');
+                alert('✅ Estadísticas reseteadas');
+            } else {
+                alert('❌ Error reseteando estadísticas');
+            }
+        }
+
+        // ========================
+        // INICIAR
+        // ========================
+        init();
+    </script>
+</body>
+
+</html>
