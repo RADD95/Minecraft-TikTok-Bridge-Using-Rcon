@@ -1,5 +1,5 @@
 # 🎮 
-Sistema privado que conecta TikTok LIVE con Minecraft vía RCON. Reemplazo completo de TikFinity sin límites de acciones, con estadísticas acumulativas y múltiples comandos por evento.
+Sistema que conecta TikTok LIVE con Minecraft vía RCON. Reemplazo completo de TikFinity sin límites de acciones, con estadísticas acumulativas y múltiples comandos por evento.
 
 ## 🚀 Características
 
