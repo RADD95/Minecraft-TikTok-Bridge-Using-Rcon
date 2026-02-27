@@ -1,5 +1,7 @@
 const { TikTokLiveConnection } = require('tiktok-live-connector');
 const actionsService = require('../core/actions');
+const logger = require('../../utils/logger');
+
 
 class TikTokService {
     constructor() {
@@ -13,16 +15,24 @@ class TikTokService {
         this.autoReconnect = true;
         this.connectTime = 0;
         this.currentUsername = null;
+        this.lastAttempt = 0;
     }
 
     async start(username) {
+        if (Date.now() - this.lastAttempt < 5000) {
+            logger.info("⏳ Bloqueado 5s anti-spam activo...");
+            return;
+        }
+        this.lastAttempt = Date.now();
+
         if (this.isConnecting) {
-            console.log("⏳ Conexión en progreso...");
+            logger.info("⏳ Conexión en progreso...");
             return;
         }
 
-        if (this.connection && this.currentUsername === username) {
-            console.log("⚠️ Ya conectado a este usuario");
+
+        if (this.isConnected && this.currentUsername === username) {
+            logger.info(`⚠️ Ya conectado a ${username}`);
             return;
         }
 
@@ -34,7 +44,15 @@ class TikTokService {
             await this.stop();
         }
 
-        console.log("🎥 Conectando a TikTok LIVE de:", username);
+        if (this.connection) {
+            this.connection.removeAllListeners();
+            try { await this.connection.disconnect(); } catch (e) { }
+            this.connection = null;
+        }
+        this.currentUsername = null;
+
+
+        logger.info(`🎥 Conectando a TikTok LIVE de: ${username}`);
         this.currentUsername = username;
         this.connectTime = Date.now();
         this.autoReconnect = true;
@@ -43,18 +61,20 @@ class TikTokService {
             this.connection = new TikTokLiveConnection(username, {
                 processInitialData: false,
                 enableExtendedGiftInfo: true,
-                // Deshabilitar fallback de Euler si no lo usas
                 disableEulerFallbacks: false
             });
 
             this._setupListeners();
 
-            await this.connection.connect();
+            await this.connection.connect().catch(async (err) => {
+                throw new Error(`TikTok connect failed: ${err.message}`);
+            });
+
 
             this.isConnected = true;
             this.isConnecting = false;
             this.reconnectAttempts = 0; // Reset contador al conectar
-            console.log("✅ Conectado a TikTok LIVE de", username);
+            logger.info(`✅ Conectado a TikTok LIVE de: ${username}`);
 
         } catch (err) {
             this.isConnecting = false;
@@ -64,19 +84,20 @@ class TikTokService {
             const errorMsg = err?.message || String(err);
 
             if (errorMsg.includes('user_not_found')) {
-                console.error("❌ Usuario no encontrado o no está en vivo:", username);
+                logger.error(`❌ Usuario no encontrado o no está en vivo: ${username}`);
                 this.autoReconnect = false; // No reconectar si el usuario no existe
                 return;
             }
 
             if (errorMsg.includes('blocked by TikTok') || errorMsg.includes('SIGI_STATE')) {
-                console.error("❌ TikTok está bloqueando la conexión. Intenta más tarde.");
+                logger.error("❌ TikTok está bloqueando la conexión. Intenta más tarde.");
                 // Esperar más tiempo antes de reconectar
                 this._scheduleReconnect(30000); // 30 segundos
                 return;
             }
 
-            console.error("❌ Error conectando a TikTok:", errorMsg);
+            logger.error("❌ Error conectando a TikTok:", errorMsg);
+            this.lastError = errorMsg;
             this._scheduleReconnect();
         }
     }
@@ -131,7 +152,7 @@ class TikTokService {
             const nickname = data.user?.nickname || username;
 
             if (username === "unknown") {
-                console.log("⚠️ Evento follow sin usuario válido");
+                logger.warn("⚠️ Evento follow sin usuario válido");
                 return;
             }
 
@@ -145,12 +166,12 @@ class TikTokService {
 
 
         this.connection.on('error', (err) => {
-            console.error("⚠️ Error TikTok:", err?.message || err);
+            // console.error("⚠️ Error TikTok:", err?.message || err);
             this.isConnected = false;
 
             // No reconectar si es error fatal
             if (this._isFatalError(err)) {
-                console.log("⛔ Error fatal, deteniendo reconexiones");
+                logger.info("⛔ Error fatal, deteniendo reconexiones");
                 this.autoReconnect = false;
                 return;
             }
@@ -159,7 +180,7 @@ class TikTokService {
         });
 
         this.connection.on('disconnected', () => {
-            console.log("🔌 Desconectado de TikTok LIVE");
+            logger.info("🔌 Desconectado de TikTok LIVE");
             this.isConnected = false;
             if (this.autoReconnect) {
                 this._scheduleReconnect();
@@ -175,19 +196,23 @@ class TikTokService {
     }
 
     _scheduleReconnect(delay = null) {
-        if (!this.autoReconnect) return;
-        if (this.reconnectTimer) return;
+        if (!this.autoReconnect || !this.currentUsername) return;
+
+        if (this.lastError?.includes("user isn't online")) {
+            logger.info("⏹️ No reintentando: streamer offline");
+            return;
+        }
 
         this.reconnectAttempts++;
 
         if (this.reconnectAttempts > this.maxReconnectAttempts) {
-            console.log(`⛔ Máximo de reintentos (${this.maxReconnectAttempts}) alcanzado. Deteniendo.`);
+            logger.info(`⛔ Máximo de reintentos (${this.maxReconnectAttempts}) alcanzado. Deteniendo.`);
             this.autoReconnect = false;
             return;
         }
 
         const actualDelay = delay || this.reconnectDelay;
-        console.log(`🔁 Reintento ${this.reconnectAttempts}/${this.maxReconnectAttempts} en ${actualDelay / 1000}s...`);
+        logger.info(`🔁 Reintento ${this.reconnectAttempts}/${this.maxReconnectAttempts} en ${actualDelay / 1000}s...`);
 
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null;
@@ -198,7 +223,7 @@ class TikTokService {
     }
 
     async stop() {
-        console.log("🛑 Deteniendo TikTok...");
+        logger.info("🛑 Deteniendo TikTok...");
         this.autoReconnect = false;
 
         if (this.reconnectTimer) {
@@ -207,20 +232,30 @@ class TikTokService {
         }
 
         if (this.connection) {
+
             this.connection.removeAllListeners();
+
             try {
                 await this.connection.disconnect();
             } catch (err) {
-                // Ignorar errores al desconectar
+                logger.warn("⚠️ Error al disconnect:", err?.message || err);
             }
+
+
             this.connection = null;
+            this.currentUsername = null;
         }
+
+
 
         this.isConnected = false;
         this.isConnecting = false;
         this.reconnectAttempts = 0;
-        console.log("✅ TikTok detenido");
+        this.lastError = null;
+
+        logger.info("✅ TikTok detenido completamente");
     }
+
 
     getStatus() {
         return this.isConnected;

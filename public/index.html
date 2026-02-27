@@ -4,934 +4,450 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎮 Minecraft TikTok Bridge</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: #fff;
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        h1 {
-            text-align: center;
-            margin-bottom: 30px;
-            color: #00d4ff;
-            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 20px;
-        }
-
-        .card {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 15px;
-            padding: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-        }
-
-        .card h2 {
-            color: #ff6b6b;
-            margin-bottom: 15px;
-            font-size: 1.2rem;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .card h2.tiktok {
-            color: #ff0050;
-        }
-
-        .card h2.minecraft {
-            color: #00d4ff;
-        }
-
-        .card h2.actions {
-            color: #ffd93d;
-        }
-
-        .status {
-            display: inline-block;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: bold;
-        }
-
-        .status.connected {
-            background: #00d4ff;
-            color: #000;
-        }
-
-        .status.disconnected {
-            background: #ff6b6b;
-            color: #fff;
-        }
-
-        input,
-        select,
-        textarea,
-        button {
-            width: 100%;
-            padding: 12px;
-            margin: 8px 0;
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            background: rgba(0, 0, 0, 0.3);
-            color: #fff;
-            font-size: 14px;
-        }
-
-        input:focus,
-        select:focus,
-        textarea:focus {
-            outline: none;
-            border-color: #00d4ff;
-            box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
-        }
-
-        button {
-            background: linear-gradient(135deg, #00d4ff 0%, #0077b6 100%);
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
-            text-transform: uppercase;
-            transition: all 0.3s ease;
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
-        }
-
-        button.danger {
-            background: linear-gradient(135deg, #ff6b6b 0%, #c92a2a 100%);
-        }
-
-        button.danger:hover {
-            box-shadow: 0 5px 20px rgba(255, 107, 107, 0.4);
-        }
-
-        button.success {
-            background: linear-gradient(135deg, #51cf66 0%, #2b8a3e 100%);
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        textarea {
-            min-height: 80px;
-            resize: vertical;
-            font-family: 'Courier New', monospace;
-        }
-
-        .actions-list {
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .action-item {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-left: 4px solid #ffd93d;
-        }
-
-        .action-item .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .action-item .type {
-            background: #ffd93d;
-            color: #000;
-            padding: 3px 10px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-
-        .action-item .trigger {
-            color: #adb5bd;
-            font-size: 0.9rem;
-        }
-
-        .action-item .command {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 10px;
-            border-radius: 5px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.85rem;
-            color: #51cf66;
-            word-break: break-all;
-        }
-
-        .delete-btn {
-            background: #ff6b6b;
-            color: #fff;
-            border: none;
-            padding: 5px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 0.8rem;
-        }
-
-        .save-btn {
-            background: #51cf66;
-            color: #000;
-            border: none;
-            padding: 5px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            font-weight: 600;
-            margin-right: 8px;
-        }
-
-        .save-btn:hover {
-            background: #40c057;
-        }
-
-
-        .help-text {
-            color: #868e96;
-            font-size: 0.85rem;
-            margin-top: 5px;
-        }
-
-        .log-box {
-            background: rgba(0, 0, 0, 0.5);
-            border-radius: 8px;
-            padding: 15px;
-            max-height: 200px;
-            overflow-y: auto;
-            font-family: 'Courier New', monospace;
-            font-size: 0.85rem;
-        }
-
-        .log-entry {
-            margin-bottom: 5px;
-            padding: 3px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .log-entry.gift {
-            color: #ff6b6b;
-        }
-
-        .log-entry.comment {
-            color: #74c0fc;
-        }
-
-        .log-entry.like {
-            color: #ff6b9d;
-        }
-
-        .log-entry.follow {
-            color: #51cf66;
-        }
-
-        .log-entry.system {
-            color: #ffd93d;
-        }
-
-        .row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
-
-        .row-3 {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 10px;
-        }
-
-        @media (max-width: 600px) {
-
-            .row,
-            .row-3 {
-                grid-template-columns: 1fr;
-            }
-        }
-
-
-        .code-editor {
-            width: 100%;
-            min-height: 140px;
-            max-height: 260px;
-            padding: 12px 14px;
-            border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            background: rgba(0, 0, 0, 0.75);
-            color: #e9ecef;
-            font-family: 'Fira Code', 'Courier New', monospace;
-            font-size: 13px;
-            line-height: 1.4;
-            white-space: pre;
-            overflow-x: auto;
-            overflow-y: auto;
-            resize: vertical;
-        }
-
-        .code-editor:focus {
-            outline: none;
-            border-color: #00d4ff;
-            box-shadow: 0 0 15px rgba(0, 212, 255, 0.4);
-        }
-
-        .code-editor-small {
-            min-height: 100px;
-            max-height: 200px;
-            font-size: 12px;
-        }
-
-        /* Para que las cards de “código” se vean un poco distintas (opcional) */
-        .card.code-card {
-            border-left: 3px solid #00d4ff;
-        }
-
-        .action-type-select {
-            background: rgba(0, 0, 0, 0.5);
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 6px;
-            cursor: pointer;
-        }
-
-        .action-type-select:focus {
-            outline: none;
-            border-color: #ffd93d;
-        }
-
-        .action-trigger-input {
-            background: rgba(0, 0, 0, 0.5);
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 6px;
-        }
-
-        .action-trigger-input:focus {
-            outline: none;
-            border-color: #ffd93d;
-            box-shadow: 0 0 8px rgba(255, 217, 61, 0.3);
-        }
-    </style>
+    <title>Minecraft TikTok Bridge | Control Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="./css/style.css">
 </head>
 
 <body>
-    <div class="container">
-        <h1>🎮 Minecraft TikTok Bridge</h1>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-gamepad"></i>
+                </div>
+                <div class="brand-text">
+                    <h1>MC-TT Bridge</h1>
+                    <span>Control Center</span>
+                </div>
+            </div>
 
-        <div class="grid">
-            <!-- Configuración RCON -->
-            <div class="card">
-                <h2 class="minecraft">🔌 Configuración RCON</h2>
-                <div class="row">
-                    <div>
-                        <label>Estado:</label>
-                        <span id="rconStatus" class=" status disconnected">Desconectado</span>
+            <nav>
+                <div class="nav-section">
+                    <div class="nav-label">Principal</div>
+                    <div class="nav-item active" onclick="switchTab('dashboard', this)">
+                        <i class="fa-solid fa-chart-line"></i>
+                        <span>Dashboard</span>
                     </div>
-                    <button onclick="testConnection()">🧪 Test</button>
-                </div>
-
-                <input id="rconHost" placeholder="IP del servidor (ej: 149.130.166.152)">
-                <div class="row">
-                    <input id="rconPort" type="number" placeholder="Puerto (25575)" value="25575">
-                    <input id="rconPassword" type="password" placeholder="Contraseña RCON">
-                </div>
-
-                <div class="row">
-                    <button onclick="saveRconConfig()">💾 Guardar</button>
-                    <button onclick="connectRcon()" id="btnConnect">🔌 Conectar</button>
-                </div>
-                <button class="danger" onclick="disconnectRcon()">🔌 Desconectar</button>
-
-
-            </div>
-
-            <div class="card">
-                <h2 class="minecraft">🧪 Comando de prueba</h2>
-
-                <p class="help-text">
-                    Escribe aquí cualquier comando RCON de Minecraft. Se enviará tal cual al servidor.
-                </p>
-
-                <textarea id="testCommand" class="code-editor" spellcheck="false"
-                    placeholder='say hola tellraw @a {"text":"Hola TikTok!","color":"gold"}'>
-                </textarea>
-
-                <button onclick="sendTestCommand()">▶️ Enviar comando</button>
-            </div>
-
-
-            <!-- Configuración TikTok -->
-            <div class="card">
-                <h2 class="tiktok">📱 TikTok LIVE</h2>
-                <div class="row">
-                    <div>
-                        <label>Estado:</label>
-                        <span id="tiktokStatus" class="status disconnected">Detenido</span>
+                    <div class="nav-item" onclick="switchTab('config', this)">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>Configuración</span>
+                    </div>
+                    <div class="nav-item" onclick="switchTab('actions', this)">
+                        <i class="fa-solid fa-bolt"></i>
+                        <span>Acciones</span>
                     </div>
                 </div>
 
-                <input id="tiktokUsername" placeholder="Usuario de TikTok (sin @)">
+                <div class="nav-section">
+                    <div class="nav-label">Herramientas</div>
+                    <div class="nav-item" onclick="resetStats()">
+                        <i class="fa-solid fa-rotate-right"></i>
+                        <span>Resetear Stats</span>
+                    </div>
+                </div>
+            </nav>
 
-                <div class="row">
-                    <button class="success" onclick="startTikTok()">▶️ Iniciar</button>
-                    <button onclick="resetStats()">♻️ Reset Stats</button>
-                    <button class="danger" onclick="stopTikTok()">⏹️ Detener</button>
+            <div class="connection-status">
+                <div class="status-header">
+                    <span class="status-title">Estado Global</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.875rem; color: var(--text-secondary);">
+                            <i class="fa-solid fa-cube" style="color: var(--accent-mc); margin-right: 0.5rem;"></i>
+                            Minecraft
+                        </span>
+                        <span id="rconStatusBadge" class="status-indicator offline">
+                            <span class="status-dot"></span>
+                            <span id="rconStatusText">Offline</span>
+                        </span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.875rem; color: var(--text-secondary);">
+                            <i class="fa-brands fa-tiktok" style="color: var(--accent-tt); margin-right: 0.5rem;"></i>
+                            TikTok
+                        </span>
+                        <span id="tiktokStatusBadge" class="status-indicator offline">
+                            <span class="status-dot"></span>
+                            <span id="tiktokStatusText">Offline</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header Global -->
+            <div
+                style="position: sticky; top: 0; z-index: 100; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border-glass); padding: 1rem 2rem; margin: -2rem -2rem 2rem -2rem; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <span style="font-size: 0.875rem; color: var(--text-secondary); margin-right: 1rem;">Conexiones
+                        Rápidas:</span>
+                    <button id="headerRconBtn" class="btn btn-secondary" onclick="toggleRcon()"
+                        style="font-size: 0.8rem;">
+                        <i class="fa-solid fa-cube"></i> RCON: <span id="headerRconStatus">Offline</span>
+                    </button>
+                    <button id="headerTiktokBtn" class="btn btn-secondary" onclick="toggleTiktok()"
+                        style="font-size: 0.8rem;">
+                        <i class="fa-brands fa-tiktok"></i> TikTok: <span id="headerTiktokStatus">Offline</span>
+                    </button>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-secondary" onclick="updateStatus()" style="width: auto;">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
+                </div>
+            </div>
+            <!-- Dashboard View -->
+            <div id="view-dashboard" class="view">
+                <div class="header">
+                    <div>
+                        <h2>Dashboard</h2>
+                        <p class="header-subtitle">Monitoreo en tiempo real de conexiones y eventos</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="updateStatus()">
+                            <i class="fa-solid fa-rotate"></i> Actualizar
+                        </button>
+                    </div>
                 </div>
 
-                <div class="help-text">
-                    El usuario debe estar en vivo (LIVE) para que funcione.
-                </div>
+                <div class="dashboard-grid">
+                    <!-- Stats Cards -->
+                    <div class="card card-full">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <i class="fa-solid fa-chart-pie"></i>
+                                Estadísticas de Sesión
+                            </div>
+                            <button class="btn btn-secondary" onclick="resetStats()">Resetear</button>
+                        </div>
+                        <div class="stats-row">
+                            <div class="stat-item">
+                                <div class="stat-value" id="stat-likes">0</div>
+                                <div class="stat-label">Likes</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-value" id="stat-comments">0</div>
+                                <div class="stat-label">Comentarios</div>
+                            </div>
+                            <div class="stat-item mc">
+                                <div class="stat-value" id="stat-gifts">0</div>
+                                <div class="stat-label">Regalos</div>
+                            </div>
+                            <div class="stat-item mc">
+                                <div class="stat-value" id="stat-diamonds">0</div>
+                                <div class="stat-label">Diamantes</div>
+                            </div>
+                        </div>
+                    </div>
 
-                <h3 style="margin-top: 20px; color: #868e96; font-size: 0.9rem;">Eventos recientes:</h3>
-                <div id="eventLog" class="log-box">
-                    <div class="log-entry system">Sistema iniciado...</div>
+                    <!-- Live Log -->
+                    <div class="card card-large">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <i class="fa-solid fa-terminal"></i>
+                                Consola de Eventos
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-secondary" onclick="pollLogs()">
+                                    <i class="fa-solid fa-rotate"></i>
+                                </button>
+                                <button class="btn btn-secondary" onclick="clearLogs()">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="console" id="eventLog">
+                            <div class="log-entry">
+                                <span class="log-time">--:--</span>
+                                <span class="log-type system">SYSTEM</span>
+                                <span class="log-message">Sistema iniciado y listo...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="card card-small">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <i class="fa-solid fa-rocket"></i>
+                                Test Rápido
+                            </div>
+                        </div>
+                        <div class="connection-input-group" style="margin-bottom: 1rem;">
+                            <label>Comando</label>
+                            <input type="text" id="quickTestCommand" class="input-field" placeholder="say Hello World">
+                        </div>
+                        <button class="btn btn-primary" style="width: 100%;" onclick="sendTestCommand()">
+                            <i class="fa-solid fa-paper-plane"></i> Enviar
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <!-- Configuración Minecraft -->
-            <div class="card">
-                <h2 class="minecraft">⛏️ Minecraft</h2>
-                <label>Nombre del jugador (para comandos):</label>
-                <input id="playerName" placeholder="Tu Nombre o Vacio para todos los jugadores">
-                <button onclick="savePlayerConfig()">💾 Guardar</button>
+            <!-- Configuration View -->
+            <div id="view-config" class="view" style="display: none;">
+                <div class="header">
+                    <div>
+                        <h2>Configuración</h2>
+                        <p class="header-subtitle">Ajustes globales y variables del sistema</p>
+                    </div>
+                </div>
 
-                <div class="help-text">
-                    Variables disponibles en comandos:<br>
-                    <code>{{username}}</code> - Usuario de TikTok<br>
-                    <code>{{nickname}}</code> - Apodo en TikTok<br>
-                    <code>{{giftname}}</code> - Nombre del regalo<br>
-                    <code>{{repeatcount}}</code> - Cantidad de regalos enviados en este evento<br>
-                    <code>{{likecount}}</code> - Cantidad de likes en este batch<br>
-                    <code>{{comment}}</code> - Texto del comentario<br>
-                    <code>{{playername}}</code> - Tu jugador en Minecraft<br>
-                    <code>{{diamondcount}}</code> - Valor en diamantes del regalo<br>
-                    <br>
-                    Contadores acumulados:<br>
-                    <code>{{totallikes}}</code> - Total de likes recibidos<br>
-                    <code>{{totalcomments}}</code> - Total de comentarios<br>
-                    <code>{{totalfollows}}</code> - Total de nuevos seguidores<br>
-                    <code>{{totalgifts}}</code> - Total de regalos recibidos<br>
-                    <code>{{totaldiamonds}}</code> - Total de diamantes gastados por los viewers<br>
-                    <code>{{userlikes}}</code> - Likes que ha dado ESTE usuario<br>
-                    <code>{{usercomments}}</code> - Comentarios que ha hecho ESTE usuario<br>
-                    <code>{{usergifts}}</code> - Regalos que ha enviado ESTE usuario<br>
-                    <code>{{userfollows}}</code> - Si este usuario siguió (1 = sí, 0 = no)
+                <div class="dashboard-grid">
+                    <!-- TikTok Connection -->
+                    <div class="card card-medium connection-card">
+                        <div class="card-header">
+                            <div class="card-title" style="color: var(--accent-tt);">
+                                <i class="fa-brands fa-tiktok"></i> Conexión TikTok
+                            </div>
+                            <span id="tiktokConnectionStatus" class="connection-status-badge status-disconnected">
+                                <i class="fa-solid fa-circle"></i> Desconectado
+                            </span>
+                        </div>
+                        <div class="connection-input-group">
+                            <label>Usuario TikTok</label>
+                            <input type="text" id="tiktokUsername" class="input-field" placeholder="tu_usuario">
+                        </div>
+                        <div style="display: flex; gap: 0.75rem; margin-top: auto;">
+                            <button class="btn btn-success" style="flex: 1;" onclick="startTikTok()"
+                                id="btnStartTiktok">
+                                <i class="fa-solid fa-play"></i> Iniciar
+                            </button>
+                            <button class="btn btn-danger" style="flex: 1;" onclick="stopTikTok()">
+                                <i class="fa-solid fa-stop"></i> Detener
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Minecraft RCON -->
+                    <div class="card card-medium connection-card">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <i class="fa-solid fa-cube"></i> Servidor Minecraft
+                            </div>
+                            <span id="rconConnectionStatus" class="connection-status-badge status-disconnected">
+                                <i class="fa-solid fa-circle"></i> Desconectado
+                            </span>
+                        </div>
+                        <div class="connection-input-group">
+                            <label>IP / Host</label>
+                            <input type="text" id="rconHost" class="input-field" placeholder="127.0.0.1">
+                        </div>
+                        <div class="input-row" style="margin-top: 0.5rem;">
+                            <div class="connection-input-group">
+                                <label>Puerto</label>
+                                <input type="number" id="rconPort" class="input-field" value="25575">
+                            </div>
+                            <div class="connection-input-group" style="grid-column: span 2;">
+                                <label>Contraseña</label>
+                                <input type="password" id="rconPassword" class="input-field"
+                                    placeholder="RCON password">
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+                            <button class="btn btn-primary" onclick="connectRcon()" id="btnConnectRcon">
+                                <i class="fa-solid fa-plug"></i> Conectar
+                            </button>
+                            <button class="btn btn-secondary" onclick="testConnection()">
+                                <i class="fa-solid fa-flask"></i> Test
+                            </button>
+                            <button class="btn btn-secondary" onclick="disconnectRcon()">Desconectar</button>
+                        </div>
+                    </div>
+
+                    <!-- Configuración Jugador -->
+                    <div class="card card-medium">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <i class="fa-solid fa-user"></i> Jugador Minecraft
+                            </div>
+                        </div>
+                        <div class="connection-input-group">
+                            <label>Nombre del jugador target</label>
+                            <input type="text" id="playerName" class="input-field" placeholder="@a o nombre específico">
+                            <p class="hint-text">Usa @a para todos los jugadores o deja vacío</p>
+                        </div>
+                        <button class="btn btn-primary" onclick="savePlayerConfig()"
+                            style="margin-top: 1rem; width: 100%;">
+                            Guardar Configuración
+                        </button>
+                    </div>
+
+                    <!-- Variables separadas en dos secciones -->
+                    <div class="card card-large" style="grid-column: span 6;">
+                        <div class="card-header">
+                            <div class="card-title">
+                                <i class="fa-solid fa-code"></i> Variables Disponibles
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                            <!-- Columna 1: Variables del Evento -->
+                            <div>
+                                <h4
+                                    style="color: var(--accent-mc); margin-bottom: 1rem; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-glass); padding-bottom: 0.5rem;">
+                                    Variables del Evento
+                                </h4>
+                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{username}}</code>
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{nickname}}</code>
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{giftname}}</code>
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{diamondcount}}</code>
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{repeatcount}}</code>
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{likecount}}</code>
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{comment}}</code>
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{playername}}</code>
+                                </div>
+                            </div>
+
+                            <!-- Columna 2: Contadores Acumulados -->
+                            <div>
+                                <h4
+                                    style="color: var(--accent-gold); margin-bottom: 1rem; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-glass); padding-bottom: 0.5rem;">
+                                    Contadores Acumulados
+                                </h4>
+                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{totallikes}}</code>
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{totalcomments}}</code>
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{totalfollows}}</code>
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{totalgifts}}</code>
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{totaldiamonds}}</code>
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{userlikes}}</code>
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{usercomments}}</code>
+                                    <code
+                                        style="background: rgba(0,0,0,0.3); padding: 0.25rem 0.5rem; border-radius: 4px; color: var(--accent-gold); font-size: 0.8rem;">{{usergifts}}</code>
+                                </div>
+                            </div>
+                        </div>
+                        <p
+                            style="color: var(--text-muted); margin-top: 1.5rem; font-size: 0.875rem; font-style: italic;">
+                            <i class="fa-solid fa-circle-info" style="margin-right: 0.5rem;"></i>
+                            Usa <code
+                                style="background: rgba(255,255,255,0.1); padding: 0.125rem 0.375rem; border-radius: 4px;">{{playername}}</code>
+                            para referenciar al jugador configurado, o <code
+                                style="background: rgba(255,255,255,0.1); padding: 0.125rem 0.375rem; border-radius: 4px;">@a</code>
+                            para todos.
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Crear Acción -->
-            <div class="card">
-                <h2 class="actions">⚡ Crear Acción</h2>
+            <!-- Actions Builder View -->
+            <div id="view-actions" class="view" style="display: none;">
+                <div class="header">
+                    <div>
+                        <h2>Acciones Configuradas (<span id="actionsCount" style="color: var(--accent-mc);">0</span>)
+                        </h2>
+                        <p class="header-subtitle">Gestiona los triggers y comandos</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="openActionModal()">
+                        <i class="fa-solid fa-plus"></i> Nueva Acción
+                    </button>
+                </div>
 
-                <label>Tipo de evento:</label>
-                <select id="actionType" onchange="updateTriggerLabel()">
+                <div class="dashboard-grid">
+                    <div class="card card-full">
+                        <!-- Barra de búsqueda -->
+                        <div class="search-bar" style="margin-bottom: 1.5rem;">
+                            <div style="display: flex; gap: 1rem; align-items: center;">
+                                <div style="position: relative; flex: 1;">
+                                    <i class="fa-solid fa-search"
+                                        style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+                                    <input type="text" id="actionSearch" class="input-field"
+                                        placeholder="Buscar por nombre, tipo, trigger o comando..."
+                                        style="padding-left: 2.5rem;" oninput="filterActions()">
+                                </div>
+                                <select id="actionFilterType" class="input-field" style="width: 150px;"
+                                    onchange="filterActions()">
+                                    <option value="all">Todos</option>
+                                    <option value="gift">🎁 Regalos</option>
+                                    <option value="comment">💬 Comentarios</option>
+                                    <option value="like">❤️ Likes</option>
+                                    <option value="follow">➕ Follows</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Grid de Cards -->
+                        <div id="actionsList" class="actions-grid"
+                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; max-height: 70vh; overflow-y: auto; padding-right: 0.5rem;">
+                            <!-- Se inyecta aquí -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+
+    <!-- Modal Acción -->
+    <div id="actionModal"
+        style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(5px);">
+        <div
+            style="background: var(--bg-secondary); border: 1px solid var(--border-glass); border-radius: var(--radius-lg); width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; padding: 2rem;">
+            <h3 style="margin-bottom: 1.5rem; color: var(--accent-mc);" id="modalTitle">Nueva Acción</h3>
+
+            <input type="hidden" id="editingIndex" value="">
+
+            <div class="form-group">
+                <label>Nombre (opcional)</label>
+                <input type="text" id="modalActionName" class="input-field" placeholder="Ej: Alerta Rose">
+            </div>
+
+            <div class="form-group">
+                <label>Tipo</label>
+                <select id="modalActionType" class="input-field" onchange="updateModalHint()">
                     <option value="gift">🎁 Regalo</option>
                     <option value="comment">💬 Comentario</option>
                     <option value="like">❤️ Like</option>
-                    <option value="follow">➕ Seguir</option>
+                    <option value="follow">➕ Follow</option>
                 </select>
-
-                <label id="triggerLabel">Nombre del regalo:</label>
-                <input id="actionTrigger" placeholder="ej: Rose, TikTok, Galaxy">
-                <p class="help-text" id="triggerHelp">Dejar vacío para cualquier regalo</p>
-
-                <label>Comando Minecraft:</label>
-                <textarea id="actionCommand" class="code-editor" spellcheck="false"
-                    placeholder='/title {{playername}} subtitle {"text":"{{username}}","color":"gold"}'>
-</textarea>
-                <p class="help-text">Ejemplo: <code>/say {{username}} envió {{giftname}}!</code></p>
-
-                <button onclick="addAction()">➕ Agregar Acción</button>
             </div>
 
-            <!-- Lista de Acciones -->
-            <div class="card code-card" style="grid-column: 1 / -1;">
-                <h2 class="actions">📋 Acciones Configuradas</h2>
-                <div id="actionsList" class="actions-list"></div>
+            <div class="form-group">
+                <label>Trigger</label>
+                <input type="text" id="modalActionTrigger" class="input-field" placeholder="Ej: Rose">
+                <p class="hint-text" id="modalTriggerHint">Nombre exacto del regalo</p>
+            </div>
 
+            <div class="form-group">
+                <label>Comando(s)</label>
+                <textarea id="modalActionCommand" class="code-editor" style="min-height: 100px;"
+                    placeholder="/say hola"></textarea>
+            </div>
 
-                <p style="color: #868e96; text-align: center;">No hay acciones configuradas</p>
+            <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem;">
+                <button class="btn btn-secondary" onclick="closeActionModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="saveActionModal()">Guardar</button>
             </div>
         </div>
     </div>
-    </div>
 
-    <script>
-        // ========================
-        // ESTADO
-        // ========================
-        let config = {};
-        let actions = [];
-
-        // ========================
-        // INICIALIZACIÓN
-        // ========================
-        async function init() {
-            await loadConfig();
-            await loadActions();
-            await updateStatus();
-
-            // Actualizar estado cada 5 segundos
-            setInterval(updateStatus, 5000);
-        }
-
-        // ========================
-        // API CALLS
-        // ========================
-        async function apiGet(endpoint) {
-            const res = await fetch(`/api${endpoint}`);
-            return res.json();
-        }
-
-        async function apiPost(endpoint, data) {
-            const res = await fetch(`/api${endpoint}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            return res.json();
-        }
-
-
-
-
-        // ========================
-        // CONFIGURACIÓN
-        // ========================
-        async function loadConfig() {
-            const data = await apiGet('/config');
-            config = data;
-
-            document.getElementById('rconHost').value = data.rcon?.host || '';
-            document.getElementById('rconPort').value = data.rcon?.port || 25575;
-            document.getElementById('rconPassword').value = data.rcon?.password || '';
-            document.getElementById('tiktokUsername').value = data.tiktok?.username || '';
-            document.getElementById('playerName').value = data.minecraft?.playername || '';
-        }
-
-        async function saveRconConfig() {
-            const newConfig = {
-                ...config,
-                rcon: {
-                    host: document.getElementById('rconHost').value,
-                    port: parseInt(document.getElementById('rconPort').value),
-                    password: document.getElementById('rconPassword').value
-                }
-            };
-
-            const res = await apiPost('/config', newConfig);
-            if (res.success) {
-                config = newConfig;
-                log('system', 'Configuración RCON guardada');
-                alert('✅ Configuración guardada');
-            }
-        }
-
-        async function savePlayerConfig() {
-            const newConfig = {
-                ...config,
-                minecraft: {
-                    playername: document.getElementById('playerName').value
-                }
-            };
-
-            const res = await apiPost('/config', newConfig);
-            if (res.success) {
-                config = newConfig;
-                log('system', 'Configuración Minecraft guardada');
-                alert('✅ Jugador guardado');
-            }
-        }
-
-        // ========================
-        // RCON
-        // ========================
-        async function connectRcon() {
-            await saveRconConfig();
-            const res = await apiPost('/rcon/connect', {});
-
-            if (res.success) {
-                log('system', 'RCON conectado correctamente');
-            } else {
-                alert('❌ Error conectando RCON');
-            }
-            await updateStatus();
-        }
-
-        async function disconnectRcon() {
-            await apiPost('/rcon/disconnect', {});
-            log('system', 'RCON desconectado');
-            await updateStatus();
-        }
-
-        async function testConnection() {
-            const res = await apiPost('/rcon/test', {});
-            if (res.success) {
-                alert('✅ Conexión OK! Respuesta: ' + res.response);
-            } else {
-                alert('❌ Error: ' + (res.error || 'No conectado'));
-            }
-        }
-
-        async function sendTestCommand() {
-            const command = document.getElementById('testCommand').value;
-            if (!command) return;
-
-            const res = await apiPost('/rcon/command', { command });
-            if (res.success) {
-                log('system', `Comando enviado: ${command}`);
-                document.getElementById('testCommand').value = '';
-            } else {
-                alert('❌ Error: ' + res.error);
-            }
-        }
-
-        // ========================
-        // TIKTOK
-        // ========================
-        async function startTikTok() {
-            const username = document.getElementById('tiktokUsername').value.trim();
-            if (!username) {
-                alert('❌ Ingresa un usuario de TikTok');
-                return;
-            }
-
-            const res = await apiPost('/tiktok/start', { username });
-            if (res.success) {
-                log('system', `Conectando a LIVE de ${username}...`);
-            }
-            await updateStatus();
-        }
-
-        async function stopTikTok() {
-            await apiPost('/tiktok/stop', {});
-            log('system', 'TikTok detenido');
-            await updateStatus();
-        }
-
-        // ========================
-        // ACCIONES
-        // ========================
-        function updateTriggerLabel() {
-            const type = document.getElementById('actionType').value;
-            const label = document.getElementById('triggerLabel');
-            const help = document.getElementById('triggerHelp');
-
-            switch (type) {
-                case 'gift':
-                    label.textContent = 'Nombre del regalo:';
-                    help.textContent = 'ej: Rose, TikTok, Galaxy, Coffee (dejar vacío para cualquiera)';
-                    break;
-                case 'comment':
-                    label.textContent = 'Texto a detectar:';
-                    help.textContent = 'ej: "hola", "tnt" (dejar vacío para cualquier comentario)';
-                    break;
-                case 'like':
-                    label.textContent = 'Cantidad mínima (opcional):';
-                    help.textContent = 'ej: 10 (ejecutar cada 10 likes)';
-                    break;
-                case 'follow':
-                    label.textContent = 'No requiere configuración';
-                    help.textContent = 'Se ejecuta en cada nuevo seguidor';
-                    break;
-            }
-        }
-
-        async function loadActions() {
-            actions = await apiGet('/actions');
-            renderActions();
-        }
-
-        function renderActions() {
-            const container = document.getElementById('actionsList');
-
-            if (actions.length === 0) {
-                container.innerHTML = '<p style="color: #868e96; text-align: center;">No hay acciones configuradas</p>';
-                return;
-            }
-
-            container.innerHTML = actions.map((action, index) => {
-                // Formatear el comando: separar por ; y mostrar cada uno en línea nueva
-                const formattedCommand = formatCommandForDisplay(action.command);
-
-                return `
-        <div class="action-item" data-index="${index}">
-            <div class="row-3" style="margin-bottom: 10px;">
-                <div>
-                    <label style="color: #868e96; font-size: 0.75rem;">Tipo:</label>
-                    <select class="action-type-select" onchange="onActionTypeChange(${index}, this.value)" style="width: 100%; padding: 6px; font-size: 0.85rem;">
-                        <option value="gift" ${action.type === 'gift' ? 'selected' : ''}>🎁 Regalo</option>
-                        <option value="comment" ${action.type === 'comment' ? 'selected' : ''}>💬 Comentario</option>
-                        <option value="like" ${action.type === 'like' ? 'selected' : ''}>❤️ Like</option>
-                        <option value="follow" ${action.type === 'follow' ? 'selected' : ''}>➕ Seguir</option>
-                    </select>
-                </div>
-                <div style="grid-column: span 2;">
-                    <label style="color: #868e96; font-size: 0.75rem;">Trigger:</label>
-                    <input type="text" 
-                           class="action-trigger-input" 
-                           value="${escapeHtml(action.trigger || '')}" 
-                           placeholder="ej: Rose, hola, 10"
-                           oninput="onActionTriggerChange(${index}, this.value)"
-                           style="width: 100%; padding: 6px; font-size: 0.85rem;">
-                </div>
-            </div>
-            
-            <label style="color: #868e96; font-size: 0.75rem;">Comando:</label>
-            <textarea
-                class="code-editor code-editor-small"
-                spellcheck="false"
-                oninput="onActionCommandChange(${index}, this.value)"
-            >${formattedCommand}</textarea>
-            
-            <div style="margin-top: 10px; display: flex; justify-content: flex-end; gap: 10px;">
-                <button class="save-btn" onclick="saveAction(${index})">💾 Guardar cambios</button>
-                <button class="delete-btn" onclick="deleteAction(${index})">🗑️ Eliminar</button>
-            </div>
-        </div>
-    `}).join('');
-        }
-
-        // Función para formatear el comando en líneas separadas
-        function formatCommandForDisplay(command) {
-            if (!command) return '';
-
-            // Si ya tiene saltos de línea, devolverlo tal cual
-            if (command.includes('\n')) return command;
-
-            // Separar por punto y coma, limpiar espacios y unir con saltos de línea
-            return command
-                .split(';')
-                .map(cmd => cmd.trim())
-                .filter(cmd => cmd.length > 0)
-                .join(';\n') + ';';
-        }
-
-        // Manejar cambios en el tipo
-        function onActionTypeChange(index, value) {
-            actions[index].type = value;
-        }
-
-        // Manejar cambios en el trigger
-        function onActionTriggerChange(index, value) {
-            actions[index].trigger = value.trim();
-        }
-
-        // Manejar cambios en el comando
-        function onActionCommandChange(index, value) {
-            actions[index].command = value;
-        }
-
-        async function saveAction(index) {
-            const action = actions[index];
-
-            // Normalizar el comando: quitar saltos de línea extra y asegurar que termine en ; si hay múltiples
-            action.command = action.command
-                .split('\n')
-                .map(line => line.trim())
-                .filter(line => line.length > 0)
-                .join(' ');
-
-            try {
-                // Primero intentar PUT si existe, sino usar el truco de borrar y recrear
-                const res = await fetch(`/api/actions/${index}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(action)
-                });
-
-                // Si PUT no existe (404), usar POST con replace
-                if (res.status === 404) {
-                    // Borrar la acción actual
-                    await fetch(`/api/actions/${index}`, { method: 'DELETE' });
-                    // Crear nueva acción
-                    const createRes = await apiPost('/actions', action);
-                    if (createRes.success) {
-                        await loadActions();
-                        log('system', `Acción #${index} actualizada`);
-                        alert('✅ Acción actualizada');
-                    }
-                } else {
-                    const data = await res.json();
-                    if (data.success) {
-                        await loadActions();
-                        log('system', `Acción #${index} guardada`);
-                        alert('✅ Cambios guardados');
-                    } else {
-                        alert('❌ Error: ' + (data.error || 'Desconocido'));
-                    }
-                }
-            } catch (err) {
-                console.error(err);
-                alert('❌ Error de red');
-            }
-        }
-
-
-        function onActionCommandChange(index, value) {
-            actions[index].command = value;
-        }
-
-        async function saveAction(index) {
-            const action = actions[index];
-
-            try {
-                const res = await apiPost(`/actions/${index}`, action);
-
-                if (res.success) {
-                    log('system', `Acción #${index} actualizada`);
-                    alert('✅ Acción actualizada');
-                    await loadActions();
-                } else {
-                    alert('❌ Error actualizando acción: ' + (res.error || 'Desconocido'));
-                }
-            } catch (err) {
-                console.error(err);
-                alert('❌ Error de red actualizando acción');
-            }
-        }
-
-
-        async function addAction() {
-            const type = document.getElementById('actionType').value;
-            const trigger = document.getElementById('actionTrigger').value.trim();
-            const command = document.getElementById('actionCommand').value.trim();
-
-            if (!command) {
-                alert('❌ El comando es requerido');
-                return;
-            }
-
-            const newAction = { type, trigger, command };
-            const res = await apiPost('/actions', newAction);
-
-            if (res.success) {
-                actions.push(newAction);
-                renderActions();
-
-                // Limpiar formulario
-                document.getElementById('actionTrigger').value = '';
-                document.getElementById('actionCommand').value = '';
-
-                log('system', `Nueva acción agregada: ${type}`);
-            }
-        }
-
-        async function deleteAction(index) {
-            if (!confirm('¿Eliminar esta acción?')) return;
-
-            const res = await fetch(`/api/actions/${index}`, {
-                method: 'DELETE'
-            });
-
-            const data = await res.json();
-            if (data.success) {
-                actions.splice(index, 1);
-                renderActions();
-                log('system', 'Acción eliminada');
-            }
-        }
-
-        // ========================
-        // UTILIDADES
-        // ========================
-        async function updateStatus() {
-            try {
-                const status = await apiGet('/status');
-
-                // Actualizar estado RCON
-                const rconStatus = document.getElementById('rconStatus');
-                if (status.rcon) {
-                    rconStatus.textContent = 'Conectado';
-                    rconStatus.className = 'status connected';
-                    document.getElementById('btnConnect').disabled = true;
-                } else {
-                    rconStatus.textContent = 'Desconectado';
-                    rconStatus.className = 'status disconnected';
-                    document.getElementById('btnConnect').disabled = false;
-                }
-
-                // Actualizar estado TikTok
-                const tiktokStatus = document.getElementById('tiktokStatus');
-                if (status.tiktok) {
-                    tiktokStatus.textContent = 'Conectado';
-                    tiktokStatus.className = 'status connected';
-                } else {
-                    tiktokStatus.textContent = 'Detenido';
-                    tiktokStatus.className = 'status disconnected';
-                }
-
-            } catch (err) {
-                console.error('Error obteniendo estado:', err);
-            }
-        }
-
-        function log(type, message) {
-            const logBox = document.getElementById('eventLog');
-            const entry = document.createElement('div');
-            entry.className = `log-entry ${type}`;
-            const time = new Date().toLocaleTimeString();
-            entry.textContent = `[${time}] ${message}`;
-
-            logBox.insertBefore(entry, logBox.firstChild);
-
-            // Mantener solo últimos 50 logs
-            while (logBox.children.length > 50) {
-                logBox.removeChild(logBox.lastChild);
-            }
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        async function resetStats() {
-            if (!confirm('¿Reiniciar TODAS las estadísticas?')) return;
-            const res = await apiPost('/stats/reset', {});
-            if (res.success) {
-                log('system', 'Estadísticas reseteadas');
-                alert('✅ Estadísticas reseteadas');
-            } else {
-                alert('❌ Error reseteando estadísticas');
-            }
-        }
-
-        // ========================
-        // INICIAR
-        // ========================
-        init();
-    </script>
+    <script src="./script/script.js"></script>
 </body>
 
 </html>

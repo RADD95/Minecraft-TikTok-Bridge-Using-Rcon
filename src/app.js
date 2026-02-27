@@ -9,6 +9,9 @@ const tiktokController = require('./controllers/tiktok');
 const actionsController = require('./controllers/actions');
 const statsController = require('./controllers/stats');
 
+//Utils
+const logger = require('./utils/logger');
+
 // Services (para reconexión automática al iniciar)
 const storage = require('./services/infra/storage');
 const rconService = require('./services/infra/rcon');
@@ -39,6 +42,7 @@ app.post("/api/config", configController.save);
 app.get("/api/actions", actionsController.get);
 app.post("/api/actions", actionsController.add);
 app.post("/api/actions/:index", actionsController.update);
+app.put("/api/actions/:index", actionsController.update); 
 app.delete("/api/actions/:index", actionsController.delete);
 
 
@@ -57,6 +61,24 @@ app.post("/api/tiktok/stop", tiktokController.stop);
 app.get("/api/stats", statsController.get);
 app.post("/api/stats/reset", statsController.reset);
 
+// SSE endpoint (reemplaza /api/logs polling)
+app.get("/api/logs/stream", (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    // Logs iniciales
+    res.write(`data: ${JSON.stringify(logger.getLogs().slice(-20))}\n\n`);
+    
+    // Stream live
+    const handler = (newLog) => {
+        res.write(`data: ${JSON.stringify([newLog])}\n\n`);
+    };
+    logger.on('newLog', handler);
+    
+    req.on('close', () => logger.off('newLog', handler));
+});
+
 // Iniciar servidor
 app.listen(PORT, "0.0.0.0", () => {
     console.log("╔═══════════════════════════════════════╗");
@@ -72,12 +94,11 @@ app.listen(PORT, "0.0.0.0", () => {
     console.log("   5. Inicia TikTok LIVE");
     console.log("");
 
-    // Intentar reconectar RCON si hay config guardada
+
+
     const config = storage.loadConfig();
-    if (config.rcon.host && config.rcon.password) {
-        console.log("🔄 Intentando reconectar RCON...");
-        rconService.connect().catch(err => {
-            console.log("⚠️ No se pudo reconectar RCON automáticamente:", err.message);
-        });
+    if (config.rcon?.host && config.rcon?.password) {
+        logger.info("⚙️ Config RCON detectada. Conecta desde panel.");
     }
+
 });

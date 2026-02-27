@@ -1,6 +1,7 @@
 const storage = require('../infra/storage');
 const statsService = require('./stats');
 const rconService = require('../infra/rcon');
+const logger = require('../../utils/logger');
 
 class ActionsService {
     parseCommand(template, data) {
@@ -97,7 +98,7 @@ class ActionsService {
 
     async handleEvent(type, data) {
         if (!rconService.isConnected()) {
-            console.log("⚠️  No hay conexión RCON. Ignorando evento.");
+            logger.warn("⚠️  No hay conexión RCON. Ignorando evento.");
             return;
         }
 
@@ -114,13 +115,13 @@ class ActionsService {
 
         // Logs
         if (type === 'like') {
-            console.log(`❤️  ${data.nickname} dio ${data.likecount} likes (Total: ${userStats.likes})`);
+            logger.info(`❤️  ${data.nickname} dio ${data.likecount} likes (Total: ${userStats.likes})`);
         } else if (type === 'comment') {
-            console.log(`💬 ${data.nickname}: ${data.comment} (Comentario #${userStats.comments})`);
+            logger.info(`💬 ${data.nickname}: ${data.comment} (Comentario #${userStats.comments})`);
         } else if (type === 'gift') {
-            console.log(`🎁 ${data.nickname} envió ${data.giftname} x${data.repeatcount} (Total: ${userStats.gifts})`);
+            logger.info(`🎁 ${data.nickname} envió ${data.giftname} x${data.repeatcount} (Total: ${userStats.gifts})`);
         } else if (type === 'follow') {
-            console.log(`➕ ${data.nickname} siguió (Follow #${stats.totalFollows})`);
+            logger.info(`➕ ${data.nickname} siguió (Follow #${stats.totalFollows})`);
         }
 
         for (const action of actions) {
@@ -143,7 +144,7 @@ class ActionsService {
                 const currMilestone = Math.floor(currentLikes / triggerVal);
 
                 if (currMilestone <= prevMilestone) continue;
-                console.log(`🎯 ${username} cruzó ${currMilestone * triggerVal} likes!`);
+                logger.info(`🎯 ${username} cruzó ${currMilestone * triggerVal} likes!`);
             }
 
             const parsedCommand = this.parseCommand(action.command, data);
@@ -151,20 +152,20 @@ class ActionsService {
 
             for (const cmd of commands) {
                 try {
-                    console.log(`🚀 Ejecutando: ${cmd}`);
+                    logger.info(`🚀 Ejecutando: ${cmd}`);
                     await rconService.send(cmd);
                     executed++;
                     if (commands.length > 1) {
                         await new Promise(resolve => setTimeout(resolve, 100));
                     }
                 } catch (err) {
-                    console.error("❌ Error ejecutando comando:", err.message);
+                    logger.error("❌ Error ejecutando comando:", err.message);
                 }
             }
         }
 
         if (executed > 0) {
-            console.log(`✅ ${executed} comando(s) ejecutado(s)`);
+            logger.info(`✅ ${executed} comando(s) ejecutado(s)`);
         }
     }
 }

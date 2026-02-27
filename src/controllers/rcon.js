@@ -1,5 +1,6 @@
 const rconService = require('../services/infra/rcon');
 const storage = require('../services/infra/storage');
+const logger = require('../utils/logger');
 
 module.exports = {
     async connect(req, res) {
@@ -54,7 +55,7 @@ module.exports = {
             let lastResponse = null;
 
             for (const cmd of commands) {
-                console.log(`🧪 TEST Ejecutando: ${cmd}`);
+                logger.info(`🧪 TEST Ejecutando: ${cmd}`);
                 lastResponse = await rconService.send(cmd);
                 if (commands.length > 1) {
                     await new Promise(r => setTimeout(r, 100));

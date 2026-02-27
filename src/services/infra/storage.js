@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const logger = require('../../utils/logger');
 
 const FILES = {
     config: path.join(process.cwd(), 'config.json'),
@@ -16,7 +17,7 @@ class Storage {
             }
             return JSON.parse(fs.readFileSync(file, 'utf8'));
         } catch (err) {
-            console.error(`Error leyendo ${file}:`, err);
+            logger.error(`Error leyendo ${file}:`, err);
             return defaultValue;
         }
     }
