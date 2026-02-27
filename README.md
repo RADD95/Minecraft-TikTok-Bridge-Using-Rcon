@@ -1,5 +1,5 @@
 # 🎮 
-Sistema privado que conecta TikTok LIVE con Minecraft vía RCON. Reemplazo completo de TikFinity sin límites de acciones, con estadísticas acumulativas y múltiples comandos por evento.
+Sistema que conecta TikTok LIVE con Minecraft vía RCON. Reemplazo completo de TikFinity sin límites de acciones, con estadísticas acumulativas y múltiples comandos por evento.
 
 ## 🚀 Características
 
@@ -133,5 +133,5 @@ execute at {{playername}} run particle minecraft:large_smoke ~ ~3 ~ 2 2 2 0.05 1
 
 ## 📜 Licencia
 
-Proyecto privado. Comparte dando crédito 😎
+Eres libre de copiar, distribuir y modificar este software. Solo recuerda dar crédito al autor y, si haces mejoras geniales, ¡no te las guardes! Que el código siga siendo libre para todos.
 
