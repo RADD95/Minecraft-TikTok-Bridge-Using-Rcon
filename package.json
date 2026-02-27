@@ -4,5 +4,8 @@
     "express": "^5.2.1",
     "rcon-client": "^4.2.5",
     "tiktok-live-connector": "^2.1.1-beta1"
+  },
+  "scripts": {
+    "start": "node src/app.js"
   }
 }
