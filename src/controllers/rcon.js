@@ -1,6 +1,7 @@
 const rconService = require('../services/infra/rcon');
 const storage = require('../services/infra/storage');
 const logger = require('../utils/logger');
+const queue = require('../services/core/queue');
 
 module.exports = {
     async connect(req, res) {
@@ -31,38 +32,32 @@ module.exports = {
         }
     },
 
-    async command(req, res) {
+ async command(req, res) {
         const { command } = req.body;
+        const { useQueue = false } = req.body;  // ← NUEVO PARAM
 
         if (!rconService.isConnected()) {
             return res.status(400).json({ success: false, error: "RCON no conectado" });
         }
 
         try {
-            const fakeData = {
-                username: "test_user",
-                nickname: "Tester",
-                giftname: "Rose",
-                repeatcount: 1,
-                likecount: 15,
-                comment: "Comentario de prueba",
-                diamondCount: 1
-            };
-
-            const actionsService = require('../services/core/actions');
+            const fakeData = { /* igual */ };
+            const actionsService = require('../core/actions');
             const parsed = actionsService.parseCommand(command, fakeData);
             const commands = actionsService.splitCommands(parsed);
-            let lastResponse = null;
 
-            for (const cmd of commands) {
-                logger.info(`🧪 TEST Ejecutando: ${cmd}`);
-                lastResponse = await rconService.send(cmd);
-                if (commands.length > 1) {
-                    await new Promise(r => setTimeout(r, 100));
+            if (useQueue) {
+                queue.add(commands, 'action');
+                res.json({ success: true, queued: commands.length, totalPending: queue.queue.length });
+            } else {
+                // Inmediato (igual)
+                let lastResponse = null;
+                for (const cmd of commands) {
+                    logger.info(`🚀 Directo: ${cmd}`);
+                    lastResponse = await rconService.send(cmd);
                 }
+                res.json({ success: true, executed: commands.length });
             }
-
-            res.json({ success: true, response: lastResponse, executed: commands.length });
         } catch (err) {
             res.status(500).json({ success: false, error: err.message });
         }

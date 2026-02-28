@@ -954,6 +954,7 @@ input:checked+.slider:before {
 
 /* Grid de Actions como Cards */
 .actions-grid {
+  align-items: start;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.2) rgba(0,0,0,0.2);
 }
@@ -967,19 +968,141 @@ input:checked+.slider:before {
   border-radius: 3px;
 }
 
+
+/* Mejoras para cards de acciones */
 .action-card {
-  transition: all 0.2s ease;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.2s ease;
 }
 
 .action-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(6, 182, 212, 0.3);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    transform: translateY(-2px);
+    border-color: rgba(6, 182, 212, 0.3);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
-/* Responsive: en móvil una sola columna */
+
+/* Pills de comandos */
+.command-pill {
+  transition: all 0.2s;
+  cursor: pointer; 
+  position: relative;
+  z-index: 1;
+}
+
+.command-pill:hover {
+  white-space: normal !important;
+  overflow: visible !important;
+  background: var(--bg-primary) !important;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  z-index: 50;
+}
+
+/* Clase para comandos ocultos inicialmente */
+.hidden-command {
+  display: none;
+  opacity: 0;
+}
+
+/* Botón toggle */
+.command-toggle:hover {
+  border-color: var(--accent-mc) !important;
+  color: var(--accent-mc) !important;
+}
+
+/* Animación de aparición */
+@keyframes fadeIn {
+  from { 
+    opacity: 0; 
+    transform: translateY(-5px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+
+/* Responsive */
 @media (max-width: 768px) {
-  #actionsList {
+  .actions-grid {
     grid-template-columns: 1fr !important;
   }
+}
+
+/* ======================
+   Toggle Switch Cola Acciones
+   ====================== */
+
+.toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(15, 23, 42, 0.6);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-glass);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.toggle-container:hover {
+    background: rgba(15, 23, 42, 0.8);
+}
+
+.toggle-label {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+/* Ocultamos el checkbox real */
+.toggle-container input[type="checkbox"] {
+    display: none;
+}
+
+/* Píldora del switch */
+.toggle-switch {
+    position: relative;
+    width: 46px;
+    height: 24px;
+    background: rgba(148, 163, 184, 0.6); /* gris */
+    border-radius: 999px;
+    transition: background 0.25s ease;
+    flex-shrink: 0;
+}
+
+/* Circulito que se mueve */
+.toggle-slider {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    transition: transform 0.25s ease;
+}
+
+/* Hint a la derecha en gris */
+.toggle-hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* Estado ON: cambia color + mueve el círculo */
+.toggle-container input[type="checkbox"]:checked + .toggle-switch {
+    background: var(--accent-mc); /* tu verde Minecraft */
+}
+
+.toggle-container input[type="checkbox"]:checked + .toggle-switch .toggle-slider {
+    transform: translateX(22px);
 }

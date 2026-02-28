@@ -284,7 +284,7 @@
                     </div>
 
                     <!-- Variables separadas en dos secciones -->
-                    <div class="card card-large" style="grid-column: span 6;">
+                    <div class="card card-medium">
                         <div class="card-header">
                             <div class="card-title">
                                 <i class="fa-solid fa-code"></i> Variables Disponibles
@@ -438,7 +438,30 @@
                 <label>Comando(s)</label>
                 <textarea id="modalActionCommand" class="code-editor" style="min-height: 100px;"
                     placeholder="/say hola"></textarea>
+                <p class="hint-text" id="modalCommandHint">Recuerda separar comandos con punto y coma (;) para agregar
+                    múltiples comandos</p>
             </div>
+
+            <div class="form-group">
+                <label class="toggle-container">
+                    <span class="toggle-label">Usar cola</span>
+
+                    <!-- Checkbox REAL (oculto por CSS) -->
+                    <input type="checkbox" id="modalUseQueue">
+
+                    <!-- Switch visual -->
+                    <div class="toggle-switch">
+                        <span class="toggle-slider"></span>
+                    </div>
+
+                    <!-- Texto explicación -->
+                    <span class="toggle-hint">
+                        Comandos secuenciales (evita que se sobrepongan)
+                    </span>
+                </label>
+            </div>
+
+
 
             <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem;">
                 <button class="btn btn-secondary" onclick="closeActionModal()">Cancelar</button>

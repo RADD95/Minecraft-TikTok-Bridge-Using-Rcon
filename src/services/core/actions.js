@@ -2,6 +2,7 @@ const storage = require('../infra/storage');
 const statsService = require('./stats');
 const rconService = require('../infra/rcon');
 const logger = require('../../utils/logger');
+const queue = require('./queue');  // ← NUEVO IMPORT
 
 class ActionsService {
     parseCommand(template, data) {
@@ -10,7 +11,6 @@ class ActionsService {
         const username = data.username || "";
         const userStats = stats.users[username] || { likes: 0, comments: 0, gifts: 0, follows: 0 };
 
-        // Función para escapar comillas dobles (importante para JSON)
         const escapeQuotes = (str) => String(str || "").replace(/"/g, '\\"');
 
         return template
@@ -22,7 +22,6 @@ class ActionsService {
             .replace(/{{nickname}}/g, escapeQuotes(data.nickname).replace(/@/g, "＠"))
             .replace(/{{playername}}/g, config.minecraft?.playername || "@a")
             .replace(/{{diamondcount}}/g, data.diamondCount || "0")
-            // ... resto de variables
             .replace(/{{totallikes}}/g, stats.totalLikes.toString())
             .replace(/{{totalcomments}}/g, stats.totalComments.toString())
             .replace(/{{totalfollows}}/g, stats.totalFollows.toString())
@@ -103,9 +102,9 @@ class ActionsService {
         }
 
         const actions = storage.loadActions();
-        let executed = 0;
+        let executed = 0, queued = 0;
 
-        // Incrementar stats primero
+        // Stats primero
         const stats = statsService.increment(type, data);
 
         const username = data.username || "unknown";
@@ -113,60 +112,71 @@ class ActionsService {
         const likesAdded = parseInt(data.likecount) || 1;
         const userLikesBefore = userStats.likes - likesAdded;
 
-        // Logs
-        if (type === 'like') {
-            logger.info(`❤️  ${data.nickname} dio ${data.likecount} likes (Total: ${userStats.likes})`);
-        } else if (type === 'comment') {
-            logger.info(`💬 ${data.nickname}: ${data.comment} (Comentario #${userStats.comments})`);
-        } else if (type === 'gift') {
-            logger.info(`🎁 ${data.nickname} envió ${data.giftname} x${data.repeatcount} (Total: ${userStats.gifts})`);
-        } else if (type === 'follow') {
-            logger.info(`➕ ${data.nickname} siguió (Follow #${stats.totalFollows})`);
-        }
+        // Logs evento (igual)
+        if (type === 'like') logger.info(`❤️  ${data.nickname} dio ${data.likecount} likes (Total: ${userStats.likes})`);
+        else if (type === 'comment') logger.info(`💬 ${data.nickname}: ${data.comment} (Comentario #${userStats.comments})`);
+        else if (type === 'gift') logger.info(`🎁 ${data.nickname} envió ${data.giftname} x${data.repeatcount} (Total: ${userStats.gifts})`);
+        else if (type === 'follow') logger.info(`➕ ${data.nickname} siguió (Follow #${stats.totalFollows})`);
 
+        // ← LOOP PRINCIPAL CON COLA
         for (const action of actions) {
             if (action.type !== type) continue;
 
-            if (type === 'comment' && action.trigger) {
-                if (!data.comment.toLowerCase().includes(action.trigger.toLowerCase())) continue;
-            }
-
-            if (type === 'gift' && action.trigger) {
-                if (data.giftname.toLowerCase() !== action.trigger.toLowerCase()) continue;
-            }
-
+            // Filtros trigger (igual)
+            if (type === 'comment' && action.trigger && !data.comment.toLowerCase().includes(action.trigger.toLowerCase())) continue;
+            if (type === 'gift' && action.trigger && data.giftname.toLowerCase() !== action.trigger.toLowerCase()) continue;
             if (type === 'like' && action.trigger) {
                 const triggerVal = parseInt(action.trigger);
                 if (isNaN(triggerVal) || triggerVal <= 0) continue;
-
                 const currentLikes = userStats.likes;
                 const prevMilestone = Math.floor(userLikesBefore / triggerVal);
                 const currMilestone = Math.floor(currentLikes / triggerVal);
-
                 if (currMilestone <= prevMilestone) continue;
                 logger.info(`🎯 ${username} cruzó ${currMilestone * triggerVal} likes!`);
             }
 
+            // ← GENERAR COMANDOS
             const parsedCommand = this.parseCommand(action.command, data);
             const commands = this.splitCommands(parsedCommand);
 
-            for (const cmd of commands) {
-                try {
-                    logger.info(`🚀 Ejecutando: ${cmd}`);
-                    await rconService.send(cmd);
-                    executed++;
-                    if (commands.length > 1) {
-                        await new Promise(resolve => setTimeout(resolve, 100));
+            if (action.useQueue ?? false) {
+                const sourceName =
+                    action.name ||
+                    `${type}-${data.giftname || data.comment?.slice(0, 10) || 'event'}`;
+
+                // ⬅️ Ahora un grupo = todos los comandos de ESTA acción
+                queue.add(commands, sourceName);
+                queued++;  // contamos grupos, no comandos
+
+                logger.info(
+                    `📋 [${sourceName}] grupo a cola (${commands.length} comandos)`
+                );
+            } else {
+                // Directo (sin cola), igual que ya tenías
+                for (const cmd of commands) {
+                    try {
+                        logger.info(`🚀 [${action.name}] ${cmd}`);
+                        await rconService.send(cmd);
+                        executed++;
+                        if (commands.length > 1) {
+                            await new Promise(resolve => setTimeout(resolve, 100));
+                        }
+                    } catch (err) {
+                        logger.error("❌ Error ejecutando comando:", err.message);
                     }
-                } catch (err) {
-                    logger.error("❌ Error ejecutando comando:", err.message);
                 }
             }
+
         }
 
+        // ← LOGS FINALES
+        if (queued > 0) {
+            logger.info(`📋 ${queued} grupo(s) en cola`);
+        }
         if (executed > 0) {
             logger.info(`✅ ${executed} comando(s) ejecutado(s)`);
         }
+        ;
     }
 }
 

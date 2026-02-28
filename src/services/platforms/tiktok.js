@@ -19,8 +19,8 @@ class TikTokService {
     }
 
     async start(username) {
-        if (Date.now() - this.lastAttempt < 5000) {
-            logger.info("⏳ Bloqueado 5s anti-spam activo...");
+        if (Date.now() - this.lastAttempt < 10000) {
+            logger.info("⏳ Bloqueado 10s anti-spam activo...");
             return;
         }
         this.lastAttempt = Date.now();

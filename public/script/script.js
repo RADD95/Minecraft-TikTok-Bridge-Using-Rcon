@@ -187,20 +187,19 @@ async function loadActions() {
   }
 }
 
-
 function renderActions() {
   const container = document.getElementById('actionsList');
   const countEl = document.getElementById('actionsCount');
-
+  
   if (!container) {
     console.error('Elemento actionsList no encontrado');
     return;
   }
-
-  // Actualizar contador (mostrar "X de Y" si hay filtro activo)
+  
   const searchTerm = document.getElementById('actionSearch')?.value?.trim() || '';
   const filterType = document.getElementById('actionFilterType')?.value || 'all';
-
+  
+  // Actualizar contador
   if (countEl) {
     if (filteredActions.length !== actions.length) {
       countEl.textContent = `${filteredActions.length} de ${actions.length}`;
@@ -208,7 +207,7 @@ function renderActions() {
       countEl.textContent = actions.length;
     }
   }
-
+  
   if (filteredActions.length === 0) {
     container.innerHTML = `
       <div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 3rem; border: 2px dashed var(--border-glass); border-radius: var(--radius-md);">
@@ -218,44 +217,117 @@ function renderActions() {
       </div>`;
     return;
   }
-
-  container.innerHTML = filteredActions.map((action, index) => {
-    // Buscar el índice real en el array original para poder editar/borrar
-    const originalIndex = actions.findIndex(a =>
-      a.name === action.name && a.type === action.type && a.trigger === action.trigger && a.command === action.command
-    );
-
+  
+  container.innerHTML = filteredActions.map((action, displayIndex) => {
+    // Guardar el índice real para usar en editar/eliminar
+    const originalIndex = actions.indexOf(action);
+    
+    // Procesar todos los comandos (no solo los primeros 3)
+    const commands = action.command
+      .split(';')
+      .map(cmd => cmd.trim())
+      .filter(cmd => cmd.length > 0);
+    
+    const hasMoreCommands = commands.length > 3;
+    
     return `
-    <div class="action-card" style="background: var(--bg-secondary); border: 1px solid var(--border-glass); border-radius: var(--radius-md); padding: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem; position: relative; overflow: hidden;">
-      <!-- Header de la card -->
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-          <span class="action-tag tag-${action.type}" style="font-size: 0.7rem;">
-            ${action.type === 'gift' ? '🎁' : action.type === 'comment' ? '💬' : action.type === 'like' ? '❤️' : '➕'} ${action.type}
-          </span>
-          ${action.trigger ? `<span style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-gold); background: rgba(251, 191, 36, 0.1); padding: 0.125rem 0.5rem; border-radius: 4px;">${action.trigger}</span>` : ''}
+      <div class="action-card" data-index="${originalIndex}">
+        <!-- Header -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <span class="action-tag tag-${action.type}">
+              ${action.type === 'gift' ? '🎁' : action.type === 'comment' ? '💬' : action.type === 'like' ? '❤️' : '➕'}
+              ${action.type}
+            </span>
+            ${action.trigger ? `
+              <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent-gold); background: rgba(251, 191, 36, 0.1); padding: 0.2rem 0.5rem; border-radius: 12px; border: 1px solid rgba(251, 191, 36, 0.2);">
+                ${action.trigger}
+              </span>
+            ` : ''}
+          </div>
+          <div style="display: flex; gap: 0.25rem;">
+            <button class="btn-icon" onclick="editAction(${originalIndex})" title="Editar">
+              <i class="fa-solid fa-pen"></i>
+            </button>
+            <button class="btn-icon delete" onclick="deleteAction(${originalIndex})" title="Eliminar">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
         </div>
-        <div style="display: flex; gap: 0.25rem;">
-          <button class="btn-icon" onclick="editAction(${originalIndex})" title="Editar">
-            <i class="fa-solid fa-pen"></i>
-          </button>
-          <button class="btn-icon delete" onclick="deleteAction(${originalIndex})" title="Eliminar">
-            <i class="fa-solid fa-trash"></i>
-          </button>
+        
+        <!-- Nombre -->
+        <div style="font-weight: 600; font-size: 1.1rem; color: var(--text-primary); margin-bottom: 0.75rem;">
+          ${escapeHtml(action.name) || 'Sin nombre'}
+        </div>
+        
+        <!-- Comandos -->
+        <div class="commands-container" data-expanded="false">
+          ${commands.map((cmd, idx) => `
+            <div class="command-pill ${idx >= 3 ? 'hidden-command' : ''}" 
+                 data-cmd="${escapeHtml(cmd)}"
+                 style="
+                   background: rgba(6, 182, 212, 0.08);
+                   border: 1px solid rgba(6, 182, 212, 0.2);
+                   border-radius: var(--radius-sm);
+                   padding: 0.5rem 0.75rem;
+                   font-family: var(--font-mono);
+                   font-size: 0.8rem;
+                   color: var(--accent-mc);
+                   position: relative;
+                   padding-left: 1.25rem;
+                   overflow: hidden;
+                   text-overflow: ellipsis;
+                   white-space: nowrap;
+                   ${idx >= 3 ? 'display: none;' : ''}
+                 ">
+              <span style="position: absolute; left: 0.5rem; top: 50%; transform: translateY(-50%); color: var(--accent-mc); opacity: 0.6; font-weight: 600;">></span>
+              ${escapeHtml(cmd)}
+            </div>
+          `).join('')}
+          
+          ${hasMoreCommands ? `
+            <div class="command-toggle" onclick="toggleExpandCard(this)" style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 0.5rem; cursor: pointer; border: 1px dashed var(--border-glass); border-radius: var(--radius-sm); margin-top: 0.5rem; user-select: none; transition: all 0.2s;">
+              <i class="fa-solid fa-chevron-down toggle-icon"></i>
+              <span class="toggle-text">Ver ${commands.length - 3} comandos más</span>
+            </div>
+          ` : ''}
         </div>
       </div>
-      
-      <!-- Nombre -->
-      <div style="font-weight: 600; font-size: 1.1rem; color: var(--text-primary); margin-top: 0.25rem;">
-        ${action.name || 'Sin nombre'}
-      </div>
-      
-      <!-- Comando (preview) -->
-      <div style="background: rgba(0,0,0,0.3); padding: 0.75rem; border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 3px solid var(--accent-mc);">
-        ${action.command || 'Sin comando'}
-      </div>
-    </div>
-  `}).join('');
+    `;
+  }).join('');
+}
+
+function toggleExpandCard(btn) {
+  const container = btn.parentElement;
+  const isExpanded = container.dataset.expanded === 'true';
+  const hiddenPills = container.querySelectorAll('.command-pill.hidden-command');
+  const icon = btn.querySelector('.toggle-icon');
+  const text = btn.querySelector('.toggle-text');
+  const totalHidden = hiddenPills.length;
+  
+  if (isExpanded) {
+    // Contraer - ocultar los comandos extra
+    hiddenPills.forEach(pill => {
+      pill.style.display = 'none';
+    });
+    if (icon) icon.className = 'fa-solid fa-chevron-down toggle-icon';
+    if (text) text.textContent = `Ver ${totalHidden} comandos más`;
+    container.dataset.expanded = 'false';
+  } else {
+    // Expandir - mostrar todos los comandos
+    hiddenPills.forEach((pill, idx) => {
+      pill.style.display = 'block';
+      // Agregar delay para animación escalonada
+      pill.style.animation = `fadeIn 0.3s ease ${idx * 0.05}s both`;
+    });
+    if (icon) icon.className = 'fa-solid fa-chevron-up toggle-icon';
+    if (text) text.textContent = 'Ver menos';
+    container.dataset.expanded = 'true';
+  }
+  
+  // Efecto hover en el botón (delegado para no perder el onclick)
+  btn.onmouseenter = () => { btn.style.borderColor = 'var(--accent-mc)'; btn.style.color = 'var(--accent-mc)'; };
+  btn.onmouseleave = () => { btn.style.borderColor = 'var(--border-glass)'; btn.style.color = 'var(--text-muted)'; };
 }
 
 // Nueva función de filtrado
@@ -345,7 +417,9 @@ function clearLogs() {
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
-  return div.innerHTML;
+  return div.innerHTML
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 async function updateStatus() {
@@ -595,6 +669,7 @@ function openActionModal(index = null) {
     document.getElementById('modalActionType').value = action.type;
     document.getElementById('modalActionTrigger').value = action.trigger || '';
     document.getElementById('modalActionCommand').value = action.command;
+    document.getElementById('modalUseQueue').checked = !!action.useQueue;
   } else {
     document.getElementById('modalTitle').textContent = 'Nueva Acción';
     document.getElementById('editingIndex').value = '';
@@ -602,6 +677,7 @@ function openActionModal(index = null) {
     document.getElementById('modalActionType').value = 'gift';
     document.getElementById('modalActionTrigger').value = '';
     document.getElementById('modalActionCommand').value = '';
+    document.getElementById('modalUseQueue').checked = true;
   }
   updateModalHint();
 }
@@ -643,7 +719,8 @@ async function saveActionModal() {
     name: document.getElementById('modalActionName').value.trim(),
     type: document.getElementById('modalActionType').value,
     trigger: document.getElementById('modalActionTrigger').value.trim(),
-    command: document.getElementById('modalActionCommand').value.trim()
+    command: document.getElementById('modalActionCommand').value.trim(),
+    useQueue: document.getElementById('modalUseQueue').checked 
   };
 
   if (!action.command) {
