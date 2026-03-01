@@ -163,7 +163,8 @@ class ActionsService {
 
             // ← GENERAR COMANDOS
             const parsedCommand = this.parseCommand(action.command, data);
-            const commands = this.splitCommands(parsedCommand);
+            let commands = this.splitCommands(parsedCommand); 
+
 
             if (type === 'gift' && action.repeatPerUnit) {
                 const repeat = parseInt(data.repeatcount) || 1;
