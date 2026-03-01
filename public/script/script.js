@@ -57,6 +57,7 @@ async function init() {
   await loadConfig();
   await loadActions();
   await updateStatus();
+  await loadGiftsCatalog();
   connectLogs();
 
   setInterval(() => {
@@ -229,6 +230,21 @@ function renderActions() {
       .filter(cmd => cmd.length > 0);
     
     const hasMoreCommands = commands.length > 3;
+
+    // Buscar icono del regalo si es tipo gift y tiene trigger
+    let triggerGift = null;
+    if (
+      action.type === 'gift' &&
+      action.trigger &&
+      Array.isArray(giftsCatalog) &&
+      giftsCatalog.length > 0
+    ) {
+      const trigLower = action.trigger.toLowerCase();
+      triggerGift =
+        giftsCatalog.find(
+          g => g.name_en && g.name_en.toLowerCase() === trigLower
+        ) || null;
+    }
     
     return `
       <div class="action-card" data-index="${originalIndex}">
@@ -239,11 +255,35 @@ function renderActions() {
               ${action.type === 'gift' ? '🎁' : action.type === 'comment' ? '💬' : action.type === 'like' ? '❤️' : '➕'}
               ${action.type}
             </span>
-            ${action.trigger ? `
-              <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent-gold); background: rgba(251, 191, 36, 0.1); padding: 0.2rem 0.5rem; border-radius: 12px; border: 1px solid rgba(251, 191, 36, 0.2);">
-                ${action.trigger}
+            ${
+              action.trigger
+                ? `
+              <span
+                style="
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 0.25rem;
+                  font-family: var(--font-mono);
+                  font-size: 0.75rem;
+                  color: var(--accent-gold);
+                  background: rgba(251, 191, 36, 0.1);
+                  padding: 0.2rem 0.5rem;
+                  border-radius: 12px;
+                  border: 1px solid rgba(251, 191, 36, 0.2);
+                "
+                ${triggerGift ? `title="${triggerGift.diamonds} 💎"` : ''}
+              >
+                ${
+                  triggerGift
+                    ? `<img src="${triggerGift.image_url}"
+                             style="width: 18px; height: 18px; border-radius: 50%; object-fit: contain;">`
+                    : ''
+                }
+                ${escapeHtml(action.trigger)}
               </span>
-            ` : ''}
+            `
+                : ''
+            }
           </div>
           <div style="display: flex; gap: 0.25rem;">
             <button class="btn-icon" onclick="editAction(${originalIndex})" title="Editar">
@@ -280,7 +320,7 @@ function renderActions() {
                    white-space: nowrap;
                    ${idx >= 3 ? 'display: none;' : ''}
                  ">
-              <span style="position: absolute; left: 0.5rem; top: 50%; transform: translateY(-50%); color: var(--accent-mc); opacity: 0.6; font-weight: 600;">></span>
+              <span style="position: absolute; left: 0.5rem; top: 50%; transform: translateY(-50%); color: var(--accent-mc); opacity: 0.6; font-weight: 600;">&gt;</span>
               ${escapeHtml(cmd)}
             </div>
           `).join('')}
@@ -733,6 +773,18 @@ function updateModalHint() {
   trigger.disabled = false;
 }
 
+let giftsCatalog = [];
+
+async function loadGiftsCatalog() {
+  try {
+    const data = await apiGet('/gifts');
+    giftsCatalog = Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.error('Error cargando catálogo de regalos:', e);
+    giftsCatalog = [];
+  }
+}
+
 async function saveActionModal() {
   const index = document.getElementById('editingIndex').value;
   const action = {
@@ -768,5 +820,138 @@ async function saveActionModal() {
   closeActionModal();
   await loadActions();
 }
+
+function setupGiftAutocomplete() {
+  const triggerInput = document.getElementById('modalActionTrigger');
+  const suggestionsBox = document.getElementById('giftSuggestions');
+  const previewImg = document.getElementById('giftTriggerPreview');
+
+  if (!triggerInput || !suggestionsBox || !previewImg) return;
+
+  let currentGift = null;
+
+  function updatePreview(gift) {
+    if (gift && gift.image_url) {
+      previewImg.src = gift.image_url;
+      previewImg.style.display = 'block';
+    } else {
+      previewImg.style.display = 'none';
+      previewImg.src = '';
+    }
+  }
+
+  function closeSuggestions() {
+    suggestionsBox.style.display = 'none';
+    suggestionsBox.innerHTML = '';
+  }
+
+  triggerInput.addEventListener('input', () => {
+    const type = document.getElementById('modalActionType').value;
+    if (type !== 'gift') {
+      closeSuggestions();
+      updatePreview(null);
+      return;
+    }
+
+    const term = triggerInput.value.trim().toLowerCase();
+    if (!term || giftsCatalog.length === 0) {
+      closeSuggestions();
+      updatePreview(null);
+      return;
+    }
+
+    // ---- NUEVA LÓGICA DE PRIORIDAD ----
+    const ranked = [];
+    giftsCatalog.forEach(g => {
+      if (!g.name_en) return;
+      const name = g.name_en.toLowerCase();
+
+      if (name === term) {
+        // 1) Coincidencia exacta
+        ranked.push({ gift: g, rank: 1 });
+      } else if (name.startsWith(term)) {
+        // 2) Empieza por el término
+        ranked.push({ gift: g, rank: 2 });
+      } else if (name.includes(term)) {
+        // 3) Lo contiene en cualquier posición
+        ranked.push({ gift: g, rank: 3 });
+      }
+    });
+
+    ranked.sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      // Dentro de la misma categoría, más diamantes primero (opcional)
+      return (b.gift.diamonds || 0) - (a.gift.diamonds || 0);
+    });
+
+    const matches = ranked.slice(0, 8).map(r => r.gift);
+    // -----------------------------------
+
+    if (matches.length === 0) {
+      closeSuggestions();
+      updatePreview(null);
+      return;
+    }
+
+    suggestionsBox.innerHTML = matches.map(g => `
+      <div class="gift-suggestion-item"
+           data-name="${g.name_en.replace(/"/g, '&quot;')}"
+           style="
+             display: flex;
+             align-items: center;
+             gap: 0.5rem;
+             padding: 0.35rem 0.5rem;
+             cursor: pointer;
+             border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+           ">
+        <img src="${g.image_url}" 
+             style="width: 24px; height: 24px; border-radius: 6px; object-fit: contain;">
+        <div style="display:flex; flex-direction:column;">
+          <span style="font-size: 0.85rem; color: var(--text-primary);">${g.name_en}</span>
+          <span style="font-size: 0.75rem; color: var(--text-muted);">${g.diamonds} 💎</span>
+        </div>
+      </div>
+    `).join('');
+
+    Array.from(suggestionsBox.children).forEach((el, idx) => {
+      el.addEventListener('click', () => {
+        const name = matches[idx].name_en;
+        currentGift = matches[idx];
+        triggerInput.value = name;
+        updatePreview(currentGift);
+        closeSuggestions();
+
+        // Si el nombre está vacío, podemos sugerir uno
+        const nameInput = document.getElementById('modalActionName');
+        if (nameInput && !nameInput.value) {
+          nameInput.value = `Alerta ${name}`;
+        }
+      });
+    });
+
+    // Posicionar y mostrar
+    suggestionsBox.style.display = 'block';
+  });
+
+  // Cerrar al perder foco (ligero delay para permitir click)
+  triggerInput.addEventListener('blur', () => {
+    setTimeout(() => {
+      closeSuggestions();
+    }, 150);
+  });
+
+  // Cuando cambias el tipo de acción, limpiar
+  document.getElementById('modalActionType').addEventListener('change', () => {
+    const type = document.getElementById('modalActionType').value;
+    if (type !== 'gift') {
+      closeSuggestions();
+      updatePreview(null);
+    }
+  });
+}
+
+
 // Start
-init();
+init().then(() => {
+  setupGiftAutocomplete();
+});

@@ -8,6 +8,7 @@ const rconController = require('./controllers/rcon');
 const tiktokController = require('./controllers/tiktok');
 const actionsController = require('./controllers/actions');
 const statsController = require('./controllers/stats');
+const giftsController = require('./controllers/gifts');
 
 //Utils
 const logger = require('./utils/logger');
@@ -44,6 +45,7 @@ app.post("/api/actions", actionsController.add);
 app.post("/api/actions/:index", actionsController.update);
 app.put("/api/actions/:index", actionsController.update); 
 app.delete("/api/actions/:index", actionsController.delete);
+app.get('/api/gifts', giftsController.get);
 
 
 // RCON
