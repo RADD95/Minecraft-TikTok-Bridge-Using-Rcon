@@ -107,6 +107,19 @@ class ActionsService {
         // Stats primero
         const stats = statsService.increment(type, data);
 
+        // PRIORIDAD REGALOS: ¿hay alguna acción gift específica para ESTE regalo?
+        let hasSpecificGiftMatch = false;
+        if (type === 'gift' && data.giftname) {
+            const giftName = data.giftname.toLowerCase();
+            hasSpecificGiftMatch = actions.some(a =>
+                a.type === 'gift' &&
+                a.trigger &&
+                a.trigger.trim() !== '' &&
+                a.trigger.toLowerCase() === giftName
+            );
+        }
+
+
         const username = data.username || "unknown";
         const userStats = stats.users[username] || { likes: 0, comments: 0, gifts: 0, follows: 0 };
         const likesAdded = parseInt(data.likecount) || 1;
@@ -122,9 +135,22 @@ class ActionsService {
         for (const action of actions) {
             if (action.type !== type) continue;
 
-            // Filtros trigger (igual)
-            if (type === 'comment' && action.trigger && !data.comment.toLowerCase().includes(action.trigger.toLowerCase())) continue;
-            if (type === 'gift' && action.trigger && data.giftname.toLowerCase() !== action.trigger.toLowerCase()) continue;
+            // 🔹 Nueva regla: si hay un gift específico, NO ejecutar los genéricos (trigger vacío)
+            if (type === 'gift' && hasSpecificGiftMatch) {
+                const trig = (action.trigger || '').trim();
+                if (trig === '') {
+                    // Acción genérica "cualquier regalo" → se salta porque ya hay una específica
+                    continue;
+                }
+            }
+
+            // Filtros trigger (los que ya tenías)
+            if (type === 'comment' && action.trigger &&
+                !data.comment.toLowerCase().includes(action.trigger.toLowerCase())) continue;
+
+            if (type === 'gift' && action.trigger &&
+                data.giftname.toLowerCase() !== action.trigger.toLowerCase()) continue;
+
             if (type === 'like' && action.trigger) {
                 const triggerVal = parseInt(action.trigger);
                 if (isNaN(triggerVal) || triggerVal <= 0) continue;
@@ -144,15 +170,10 @@ class ActionsService {
                     action.name ||
                     `${type}-${data.giftname || data.comment?.slice(0, 10) || 'event'}`;
 
-                // ⬅️ Ahora un grupo = todos los comandos de ESTA acción
                 queue.add(commands, sourceName);
-                queued++;  // contamos grupos, no comandos
-
-                logger.info(
-                    `📋 [${sourceName}] grupo a cola (${commands.length} comandos)`
-                );
+                queued++;
+                logger.info(`📋 [${sourceName}] grupo a cola (${commands.length} comandos)`);
             } else {
-                // Directo (sin cola), igual que ya tenías
                 for (const cmd of commands) {
                     try {
                         logger.info(`🚀 [${action.name}] ${cmd}`);
@@ -166,8 +187,8 @@ class ActionsService {
                     }
                 }
             }
-
         }
+
 
         // ← LOGS FINALES
         if (queued > 0) {
