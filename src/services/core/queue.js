@@ -7,7 +7,7 @@ class CommandQueue {
         this.queue = [];              // [{ commands: string[], source: string }]
         this.isProcessing = false;
         this.GROUP_DELAY_MS = 10000;   // ⬅️ MÍNIMO entre grupos (1.5s, pon 1000 / 2000 / 3000...)
-        this.COMMAND_DELAY_MS = 0;    // ⬅️ Dentro del grupo (0 = instantáneo)
+        this.COMMAND_DELAY_MS = 100;    // ⬅️ Dentro del grupo (0 = instantáneo)
         this.lastGroupFinishedAt = null; // ⬅️ Nuevo: timestamp fin del último grupo
     }
 

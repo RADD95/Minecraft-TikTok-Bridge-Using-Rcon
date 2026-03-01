@@ -504,9 +504,27 @@ function connectLogs() {
 
 
 async function pollStats() {
-  // Update stats display if you have an endpoint for this
-  // This is placeholder for real-time stat updates
+  try {
+    const stats = await apiGet('/stats');
+
+    // Ajusta estos nombres a lo que devuelva statsController.get
+    document.getElementById('stat-likes').textContent =
+      stats.totalLikes ?? 0;
+
+    document.getElementById('stat-comments').textContent =
+      stats.totalComments ?? 0;
+
+    document.getElementById('stat-gifts').textContent =
+      stats.totalGifts ?? 0;
+
+    document.getElementById('stat-diamonds').textContent =
+      stats.diamondsTotal ?? 0;
+
+  } catch (e) {
+    console.error('Error obteniendo stats:', e);
+  }
 }
+
 
 async function resetStats() {
   if (!confirm('¿Resetear todas las estadísticas?')) return;
@@ -670,6 +688,7 @@ function openActionModal(index = null) {
     document.getElementById('modalActionTrigger').value = action.trigger || '';
     document.getElementById('modalActionCommand').value = action.command;
     document.getElementById('modalUseQueue').checked = !!action.useQueue;
+    document.getElementById('modalRepeatPerUnit').checked = !!action.repeatPerUnit;
   } else {
     document.getElementById('modalTitle').textContent = 'Nueva Acción';
     document.getElementById('editingIndex').value = '';
@@ -678,6 +697,7 @@ function openActionModal(index = null) {
     document.getElementById('modalActionTrigger').value = '';
     document.getElementById('modalActionCommand').value = '';
     document.getElementById('modalUseQueue').checked = true;
+    document.getElementById('modalRepeatPerUnit').checked = false;
   }
   updateModalHint();
 }
@@ -720,7 +740,8 @@ async function saveActionModal() {
     type: document.getElementById('modalActionType').value,
     trigger: document.getElementById('modalActionTrigger').value.trim(),
     command: document.getElementById('modalActionCommand').value.trim(),
-    useQueue: document.getElementById('modalUseQueue').checked 
+    useQueue: document.getElementById('modalUseQueue').checked ,
+    repeatPerUnit: document.getElementById('modalRepeatPerUnit').checked
   };
 
   if (!action.command) {

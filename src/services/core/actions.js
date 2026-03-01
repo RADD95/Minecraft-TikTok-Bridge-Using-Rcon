@@ -165,6 +165,20 @@ class ActionsService {
             const parsedCommand = this.parseCommand(action.command, data);
             const commands = this.splitCommands(parsedCommand);
 
+            if (type === 'gift' && action.repeatPerUnit) {
+                const repeat = parseInt(data.repeatcount) || 1;
+
+                if (repeat > 1) {
+                    const expanded = [];
+                    for (let i = 0; i < repeat; i++) {
+                        expanded.push(...commands);
+                    }
+                    commands = expanded;
+
+                    logger.info(`🔁 Combo expandido: ${repeat}x para acción [${action.name || action.trigger || 'gift'}]`);
+                }
+            }
+
             if (action.useQueue ?? false) {
                 const sourceName =
                     action.name ||
