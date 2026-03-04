@@ -5,7 +5,8 @@ const logger = require('../../utils/logger');
 const FILES = {
     config: path.join(process.cwd(), 'config.json'),
     actions: path.join(process.cwd(), 'actions.json'),
-    stats: path.join(process.cwd(), 'stats.json')
+    stats: path.join(process.cwd(), 'stats.json'),
+    overlays: path.join(process.cwd(), 'overlays.json')
 };
 
 class Storage {
@@ -64,6 +65,16 @@ class Storage {
     saveStats(stats) {
         this._write(FILES.stats, stats);
     }
+
+    // Overlays
+    loadOverlays() {
+        return this._read(FILES.overlays, []); // array de overlays
+    }
+
+    saveOverlays(overlays) {
+        this._write(FILES.overlays, overlays);
+    }
+
 }
 
 module.exports = new Storage();

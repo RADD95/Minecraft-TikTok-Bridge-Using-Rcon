@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>MC TikTok Overlay</title>
+  <style>
+    body, html {
+      margin: 0; padding: 0;
+      overflow: hidden;
+      background: transparent;
+    }
+    #overlayRoot {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    .overlay-img {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      image-rendering: pixelated;
+    }
+    .anim-bounce_glow {
+      animation: bounceGlow 0.6s ease-out infinite alternate;
+      filter: drop-shadow(0 0 18px #facc15);
+    }
+    @keyframes bounceGlow {
+      from { transform: translate(-50%, -50%) scale(0.9); }
+      to   { transform: translate(-50%, -55%) scale(1.1); }
+    }
+  </style>
+</head>
+<body>
+  <div id="overlayRoot"></div>
+  <script src="/script/overlay.js"></script>
+</body>
+</html>

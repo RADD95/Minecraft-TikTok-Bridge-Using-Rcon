@@ -1,0 +1,69 @@
+[
+  {
+    "id": "ovl_35b7c5cc-b3c1-41ae-8abe-8727e7b6b3d7",
+    "name": "Nuevo overlay",
+    "canvas": {
+      "width": 1920,
+      "height": 1080,
+      "background": "transparent"
+    },
+    "elements": [
+      {
+        "id": "el_3516a886-eaf9-40bc-8746-07f0dbac4485",
+        "type": "render",
+        "src": "https://minecraft.wiki/images/Steve_JE3_BE1.png?de2eb",
+        "name": "Steve",
+        "x": 587.3429778623276,
+        "y": 101.46476270359483,
+        "width": 162.31570859634684,
+        "height": 430.0811271438613,
+        "scale": 1,
+        "rotation": 0,
+        "opacity": 100,
+        "zIndex": 1
+      },
+      {
+        "id": "el_7d02af2d-f643-42a4-99bb-2e307f713d72",
+        "type": "gift",
+        "src": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/resource/f600a2495ab5d250e7da2066484a9383.png~tplv-obj.webp",
+        "name": "Pegasus",
+        "x": 30.999999999999986,
+        "y": 247.4932837167419,
+        "width": 167.50671628325858,
+        "height": 167.50671628325856,
+        "scale": 1,
+        "rotation": 0,
+        "opacity": 100,
+        "zIndex": 2
+      },
+      {
+        "id": "el_1730d7cf-73c4-4336-af89-547a482c915d",
+        "type": "gift",
+        "src": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/resource/f600a2495ab5d250e7da2066484a9383.png~tplv-obj.webp",
+        "name": "Pegasus",
+        "x": 991.0001328079976,
+        "y": 527.4932673904666,
+        "width": 167.50671628325858,
+        "height": 167.50671628325856,
+        "scale": 1,
+        "rotation": 0,
+        "opacity": 100,
+        "zIndex": 2
+      },
+      {
+        "id": "el_6c44bd76-e9c8-40df-99c8-a9fdcd0bce83",
+        "type": "render",
+        "src": "https://minecraft.wiki/images/Steve_JE3_BE1.png?de2eb",
+        "name": "Steve",
+        "x": 1067.3430428534755,
+        "y": 110.35365229018777,
+        "width": 162.31570859634684,
+        "height": 430.0811271438613,
+        "scale": 1,
+        "rotation": 0,
+        "opacity": 100,
+        "zIndex": 1
+      }
+    ]
+  }
+]

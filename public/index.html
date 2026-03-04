@@ -12,6 +12,7 @@
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="./css/style.css">
+    <script src="https://unpkg.com/konva@9/konva.min.js"></script>
 </head>
 
 <body>
@@ -42,6 +43,10 @@
                     <div class="nav-item" onclick="switchTab('actions', this)">
                         <i class="fa-solid fa-bolt"></i>
                         <span>Acciones</span>
+                    </div>
+                    <div class="nav-item" onclick="switchTab('overlay', this)">
+                        <i class="fa-solid fa-layer-group"></i>
+                        <span>Overlay</span>
                     </div>
                 </div>
 
@@ -357,6 +362,306 @@
             </div>
 
             <!-- Actions Builder View -->
+            <div id="view-overlay" class="view" style="display: none">
+
+                <!-- VISTA 1: Grid de Overlays Existentes -->
+                <div id="overlayListView" class="overlay-manager">
+                    <div class="header">
+                        <div>
+                            <h2>Overlays Configurados <span id="overlayCount" style="color: var(--accent-tt);">0</span>
+                            </h2>
+                            <p class="header-subtitle">Gestiona tus escenas visuales para OBS / TikTok Live</p>
+                        </div>
+                        <button class="btn btn-primary" onclick="overlayApp.newOverlay()">
+                            <i class="fa-solid fa-plus"></i> Nuevo Overlay
+                        </button>
+                    </div>
+
+                    <div class="search-bar" style="margin-bottom: 1.5rem;">
+                        <i class="fa-solid fa-search"
+                            style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+                        <input type="text" id="overlaySearch" class="input-field" placeholder="Buscar overlays..."
+                            style="padding-left: 2.5rem;" oninput="overlayApp.filterOverlays()">
+                    </div>
+
+                    <div id="overlaysGrid" class="actions-grid">
+                        <!-- JS inyecta cards aquí -->
+                        <div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 3rem;">
+                            <i class="fa-solid fa-layer-group"
+                                style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                            <div>No hay overlays configurados</div>
+                            <button class="btn btn-primary" style="margin-top: 1rem;" onclick="overlayApp.newOverlay()">
+                                Crear primer overlay
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VISTA 2: Editor tipo Photopea -->
+                <div id="overlayEditorView" class="overlay-photopea" style="display: none;">
+
+                    <!-- Toolbar Superior -->
+                    <div class="photopea-toolbar">
+                        <div class="toolbar-group">
+                            <button class="btn btn-secondary active" data-tool="select" title="Seleccionar (V)">
+                                <i class="fa-solid fa-arrow-pointer"></i>
+                            </button>
+                            <button class="btn btn-secondary" data-tool="hand" title="Mover canvas (H)">
+                                <i class="fa-solid fa-hand"></i>
+                            </button>
+                            <div class="toolbar-separator"></div>
+                            <button class="btn btn-secondary" data-tool="rect" title="Añadir borde">
+                                <i class="fa-regular fa-square"></i>
+                            </button>
+                            <button class="btn btn-secondary" data-tool="text" title="Texto (T)">
+                                <i class="fa-solid fa-font"></i>
+                            </button>
+                        </div>
+
+                        <div class="toolbar-group" style="flex:1; justify-content: center;">
+                            <select id="canvasPreset" onchange="overlayApp.setCanvasResolution(this.value)"
+                                style="background: transparent; border: 1px solid var(--border-glass); color: var(--text-primary); padding: 0.25rem 0.5rem; border-radius: 4px; margin-right: 0.5rem;">
+                                <option value="1080x1920">TikTok (9:16)</option>
+                                <option value="1920x1080">YouTube (16:9)</option>
+                                <option value="1080x1080">Cuadrado (1:1)</option>
+                            </select>
+                            <div class="canvas-info">
+                                <span id="canvasDimensions">1080 × 1920</span>
+                                <span style="color: var(--text-muted); margin: 0 0.5rem;">|</span>
+                                <span id="canvasZoom">100%</span>
+                            </div>
+                            <input type="range" id="zoomSlider" min="25" max="200" value="100"
+                                style="width: 100px; margin-left: 0.5rem;">
+                        </div>
+
+                        <div class="toolbar-group">
+                            <button class="btn btn-secondary" onclick="overlayApp.toggleGrid()" title="Ver guías">
+                                <i class="fa-solid fa-border-all"></i>
+                            </button>
+                            <div class="toolbar-separator"></div>
+                            <input type="text" id="editorOverlayName" class="input-field" placeholder="Sin nombre..."
+                                style="width: 150px; font-size: 0.85rem;">
+                            <button class="btn btn-primary" onclick="overlayApp.saveCurrent()">
+                                <i class="fa-solid fa-floppy-disk"></i> Guardar
+                            </button>
+                            <button class="btn btn-secondary" onclick="overlayApp.closeEditor()"
+                                style="margin-left: 0.5rem;">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Layout Principal 3 columnas -->
+                    <div class="photopea-workspace">
+
+                        <!-- Panel Izquierdo: -->
+                        <aside class="library-sidebar" data-side="left"
+                            style="width: 520px; display: grid; grid-template-columns: 1fr 1fr; gap: 0; overflow: hidden;">
+                            <!-- Panel TikTok (Izquierda) -->
+                            <div
+                                style="display: flex; flex-direction: column; border-right: 1px solid var(--border-glass); overflow: hidden;">
+                                <div class="panel-header">
+                                    <i class="fa-brands fa-tiktok" style="color: var(--accent-tt);"></i>
+                                    <span>TikTok Gifts</span>
+                                    <div class="search-box-small">
+                                        <input type="text" id="giftFilter" placeholder="Filtrar..."
+                                            oninput="overlayApp.filterLibrary('gifts')">
+                                    </div>
+                                </div>
+                                <div id="giftLibrary" class="library-grid"
+                                    style="grid-template-columns: repeat(1, 1fr);">
+                                    <!-- Items -->
+                                </div>
+                            </div>
+
+                            <!-- Panel Minecraft (Derecha) -->
+                            <div style="display: flex; flex-direction: column; overflow: hidden;">
+                                <div class="panel-header">
+                                    <i class="fa-solid fa-cube" style="color: var(--accent-mc);"></i>
+                                    <span>Minecraft</span>
+                                    <div class="search-box-small">
+                                        <input type="text" id="renderFilter" placeholder="Filtrar..."
+                                            oninput="overlayApp.filterLibrary('renders')">
+                                    </div>
+                                </div>
+                                <div id="renderLibrary" class="library-grid"
+                                    style="grid-template-columns: repeat(1, 1fr);">
+                                    <!-- Items -->
+                                </div>
+                            </div>
+                        </aside>
+
+                        <!-- Canvas Central -->
+<div class="canvas-area" id="canvasArea">
+  <div id="canvasWorld" class="canvas-world"></div>
+</div>
+
+
+                        <!-- Panel Derecho: Librería Minecraft -->
+                        <aside class="library-sidebar" data-side="right"
+                            style="width: 260px; background: rgba(15,23,42,0.95);">
+                            <div class="panel-header">
+                                <i class="fa-solid fa-layer-group" style="color: var(--accent-gold);"></i>
+                                <span>Capas</span>
+                                <div class="search-box-small">
+                                    <input type="text" id="layerFilter" placeholder="Filtrar capas..."
+                                        oninput="overlayApp.filterLayers()">
+                                </div>
+                            </div>
+
+                            <!-- Toolbar de capas -->
+                            <div
+                                style="display: flex; gap: 0.5rem; padding: 0.75rem; border-bottom: 1px solid var(--border-glass);">
+                                <button class="btn-icon" onclick="overlayApp.newGroup()" title="Nueva carpeta">
+                                    <i class="fa-solid fa-folder-plus"></i>
+                                </button>
+                                <button class="btn-icon" onclick="overlayApp.groupSelected()"
+                                    title="Agrupar selección (Ctrl+G)">
+                                    <i class="fa-solid fa-object-group"></i>
+                                </button>
+                                <button class="btn-icon" onclick="overlayApp.ungroup()" title="Desagrupar">
+                                    <i class="fa-solid fa-object-ungroup"></i>
+                                </button>
+                                <button class="btn-icon" onclick="overlayApp.duplicateSelected()"
+                                    title="Duplicar (Ctrl+D)">
+                                    <i class="fa-solid fa-copy"></i>
+                                </button>
+                                <div style="flex:1;"></div>
+                                <button class="btn-icon delete" onclick="overlayApp.deleteSelected()"
+                                    title="Eliminar selección (Supr)">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+
+                            <div id="layersTree" class="layers-tree"
+                                style="flex: 1; overflow-y: auto; padding: 0.5rem;">
+                                <p class="hint-text" style="padding: 1rem; text-align: center;">No hay capas</p>
+                            </div>
+
+                            <div
+                                style="padding: 0.75rem; border-top: 1px solid var(--border-glass); font-size: 0.75rem; color: var(--text-muted);">
+                                <kbd>Ctrl</kbd>+Click selección múltiple • <kbd>Ctrl</kbd>+<kbd>G</kbd> agrupar
+                            </div>
+                        </aside>
+                    </div>
+
+                    <!-- Panel de Propiedades Flotante (aparece al seleccionar) -->
+                    <div id="propertiesPanel" class="properties-float" style="display: none;">
+                        <div class="prop-header">
+                            <span>Propiedades</span>
+                            <button class="btn-icon" onclick="overlayApp.closeProperties()"><i
+                                    class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div class="prop-content">
+                            <div class="prop-row">
+                                <label>Posición X</label>
+                                <input type="number" id="propX" onchange="overlayApp.updateSelected('x', this.value)">
+                                <label>Y</label>
+                                <input type="number" id="propY" onchange="overlayApp.updateSelected('y', this.value)">
+                            </div>
+                            <div class="prop-row">
+                                <label>Escala</label>
+                                <input type="number" id="propScale" step="0.1"
+                                    onchange="overlayApp.updateSelected('scale', this.value)">
+                            </div>
+                            <div class="prop-row">
+                                <label>Opacidad</label>
+                                <input type="range" id="propOpacity" min="0" max="100"
+                                    oninput="overlayApp.updateSelected('opacity', this.value)">
+                            </div>
+
+                            <!-- Simplificar la fila de borde (quitar alpha) -->
+                            <div class="prop-row">
+                                <label>Color Borde</label>
+                                <input type="color" id="propBorderColor"
+                                    onchange="overlayApp.updateSelected('borderColor', this.value)"
+                                    style="width: 60px;">
+                                <label style="min-width: auto;">Grosor</label>
+                                <input type="number" id="propBorderWidth" placeholder="px" style="width: 50px;" min="0"
+                                    max="20" onchange="overlayApp.updateSelected('borderWidth', this.value)">
+                            </div>
+
+                            <div class="prop-section">
+                                <label>Fondo</label>
+                                <input type="color" id="propBgColor"
+                                    onchange="overlayApp.updateSelected('backgroundColor', this.value)" value="#1e293b">
+                                <label style="font-size: 0.7rem; margin-top: 0.3rem;">Transparencia</label>
+                                <input type="range" id="propBgAlpha" min="0" max="100"
+                                    oninput="overlayApp.updateSelected('backgroundAlpha', this.value)"
+                                    style="width: 100%;">
+                            </div>
+
+                            <div class="prop-section">
+                                <label>Efectos</label>
+                                <input type="text" id="propBoxShadow" placeholder="0 0 10px #06b6d4"
+                                    onchange="overlayApp.updateSelected('boxShadow', this.value)"
+                                    style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glass); color: white; padding: 0.3rem;">
+                                <label style="font-size: 0.7rem; margin-top: 0.3rem;">Redondeo (px)</label>
+                                <input type="number" id="propBorderRadius" value="0" min="0"
+                                    onchange="overlayApp.updateSelected('borderRadius', this.value)"
+                                    style="width: 100%;">
+                            </div>
+
+                            <div class="prop-section" id="textEditorSection" style="display: none;">
+                                <label>Texto</label>
+                                <textarea id="propTextContent" rows="2"
+                                    oninput="overlayApp.updateSelected('text', this.value)"
+                                    style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glass); color: white; padding: 0.3rem;"></textarea>
+                                <div
+                                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
+                                    <select id="propFontFamily"
+                                        onchange="overlayApp.updateSelected('fontFamily', this.value)">
+                                        <option value="Inter">Default</option>
+                                        <option value="Minecraftia, monospace">Minecraft</option>
+                                        <option value="Arial">Arial</option>
+                                    </select>
+                                    <input type="number" id="propFontSize" value="24" min="8" max="120"
+                                        onchange="overlayApp.updateSelected('fontSize', this.value)" placeholder="px">
+                                </div>
+                                <input type="text" id="propTextShadow" placeholder="2px 2px 4px #000"
+                                    onchange="overlayApp.updateSelected('textShadow', this.value)"
+                                    style="width: 100%; margin-top: 0.3rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glass); color: white;">
+                            </div>
+
+                            <!-- Reemplazar la sección de controles de animación en el propertiesPanel -->
+                            <div class="prop-section">
+                                <label>Animación CSS</label>
+                                <select id="propAnimation"
+                                    onchange="overlayApp.updateSelected('animation', this.value)">
+                                    <option value="">Ninguna</option>
+                                    <option value="breathe">Respiración</option>
+                                    <option value="float">Flotar</option>
+                                    <option value="spin">Girar</option>
+                                    <option value="pulse">Pulsar</option>
+                                    <option value="shake">Sacudir</option>
+                                    <option value="glow">Brillo</option>
+                                </select>
+                                <div style="margin-top: 0.5rem;">
+                                    <label style="font-size: 0.7rem;">Velocidad (s)</label>
+                                    <input type="number" id="propAnimDuration" step="0.1" min="0.1" max="10" value="3"
+                                        style="width: 100%;" onchange="overlayApp.updateAnimationSpeed(this.value)">
+                                </div>
+                            </div>
+                            <div class="prop-section">
+                                <label>HTML Personalizado</label>
+                                <textarea id="propCustomHtml" rows="2" placeholder="<div class='efecto'>...</div>"
+                                    onchange="overlayApp.updateSelected('customHtml', this.value)"></textarea>
+                            </div>
+                            <div class="prop-section">
+                                <label>Trigger vinculado</label>
+                                <select id="propTrigger" onchange="overlayApp.updateSelected('trigger', this.value)">
+                                    <option value="">Ninguno</option>
+                                    <!-- Se llena dinámicamente con acciones disponibles -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+
+
             <div id="view-actions" class="view" style="display: none;">
                 <div class="header">
                     <div>
@@ -521,7 +826,9 @@
         </div>
     </div>
 
+
     <script src="./script/script.js"></script>
+    <script src="./script/overlay-editor.js"></script>
 </body>
 
 </html>

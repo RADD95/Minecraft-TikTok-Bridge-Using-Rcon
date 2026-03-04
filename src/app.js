@@ -1,6 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const fs = require("fs");
+
 
 // Controllers
 const configController = require('./controllers/config');
@@ -9,6 +11,8 @@ const tiktokController = require('./controllers/tiktok');
 const actionsController = require('./controllers/actions');
 const statsController = require('./controllers/stats');
 const giftsController = require('./controllers/gifts');
+const overlaysController = require('./controllers/overlays');
+
 
 //Utils
 const logger = require('./utils/logger');
@@ -24,6 +28,12 @@ const PORT = 4567;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
+// Renders de Minecraft (JSON en la raíz del proyecto)
+app.get('/data/minecraft_renders.json', (req, res) => {
+  res.sendFile(path.join(process.cwd(), 'minecraft_renders.json'));
+});
+
+
 
 // Routes
 app.get("/api/status", (req, res) => {
@@ -46,6 +56,13 @@ app.post("/api/actions/:index", actionsController.update);
 app.put("/api/actions/:index", actionsController.update); 
 app.delete("/api/actions/:index", actionsController.delete);
 app.get('/api/gifts', giftsController.get);
+
+// Overlays
+app.get('/api/overlays', overlaysController.list);
+app.get('/api/overlays/:id', overlaysController.get);
+app.post('/api/overlays', overlaysController.upsert);
+app.put('/api/overlays/:id', overlaysController.upsert);
+app.delete('/api/overlays/:id', overlaysController.delete);
 
 
 // RCON
@@ -80,6 +97,13 @@ app.get("/api/logs/stream", (req, res) => {
     
     req.on('close', () => logger.off('newLog', handler));
 });
+
+// Runtime del overlay (para OBS / TikTok Live Studio)
+app.get('/overlay/:id', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public', 'overlay.html'));
+});
+
+
 
 // Iniciar servidor
 app.listen(PORT, "0.0.0.0", () => {
