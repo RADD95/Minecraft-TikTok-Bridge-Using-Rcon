@@ -2,7 +2,9 @@
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "konva": "^10.2.0",
     "rcon-client": "^4.2.5",
+    "sortablejs": "^1.15.7",
     "tiktok-live-connector": "^2.1.1-beta1"
   },
   "scripts": {

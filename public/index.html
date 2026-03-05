@@ -12,7 +12,8 @@
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="./css/style.css">
-    <script src="https://unpkg.com/konva@9/konva.min.js"></script>
+    <script src="./script/konva.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 </head>
 
 <body>
@@ -376,13 +377,15 @@
                             <i class="fa-solid fa-plus"></i> Nuevo Overlay
                         </button>
                     </div>
-
                     <div class="search-bar" style="margin-bottom: 1.5rem;">
-                        <i class="fa-solid fa-search"
-                            style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
-                        <input type="text" id="overlaySearch" class="input-field" placeholder="Buscar overlays..."
-                            style="padding-left: 2.5rem;" oninput="overlayApp.filterOverlays()">
+                        <div style="position: relative; flex: 1;">
+                            <i class="fa-solid fa-search"
+                                style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
+                            <input type="text" id="overlaySearch" class="input-field" placeholder="Buscar overlays..."
+                                style="padding-left: 2.5rem;" oninput="overlayApp.filterOverlays()">
+                        </div>
                     </div>
+
 
                     <div id="overlaysGrid" class="actions-grid">
                         <!-- JS inyecta cards aquí -->
@@ -492,9 +495,9 @@
                         </aside>
 
                         <!-- Canvas Central -->
-<div class="canvas-area" id="canvasArea">
-  <div id="canvasWorld" class="canvas-world"></div>
-</div>
+                        <div class="canvas-area" id="canvasArea">
+                            <div id="canvasWorld" class="canvas-world"></div>
+                        </div>
 
 
                         <!-- Panel Derecho: Librería Minecraft -->

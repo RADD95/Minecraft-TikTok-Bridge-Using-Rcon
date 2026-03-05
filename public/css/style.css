@@ -1147,7 +1147,6 @@ input:checked+.slider:before {
 
 /* Bibliotecas laterales */
 .library-sidebar {
-  width: 260px;
   background: rgba(15, 23, 42, 0.6);
   border-right: 1px solid var(--border-glass);
   display: flex;
@@ -1155,7 +1154,9 @@ input:checked+.slider:before {
   overflow: hidden;
 }
 
+
 .library-sidebar[data-side="right"] {
+  width: 240px !important;
   border-right: none;
   border-left: 1px solid var(--border-glass);
 }
@@ -1281,16 +1282,8 @@ input:checked+.slider:before {
 
 
 
-.library-sidebar[data-side="left"] {
-  width: 280px !important;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
 
-.library-sidebar[data-side="right"] {
-  width: 240px !important;
-}
+
 
 /* Panel de Capas */
 .layers-panel {
@@ -1321,19 +1314,6 @@ input:checked+.slider:before {
   padding: 0.5rem;
 }
 
-.layer-item:hover {
-  background: rgba(255,255,255,0.05);
-}
-
-.layer-item.selected {
-  background: rgba(6, 182, 212, 0.15);
-  color: var(--accent-mc);
-}
-
-.layer-item.group {
-  font-weight: 600;
-  color: var(--accent-gold);
-}
 
 .layer-indent {
   width: 20px;
@@ -1350,16 +1330,16 @@ input:checked+.slider:before {
   opacity: 1;
 }
 
-
-.prop-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem;
-  border-bottom: 1px solid var(--border-glass);
-  font-weight: 600;
-  font-size: 0.9rem;
+.properties-float .prop-header {
+  cursor: grab;
+  user-select: none;
+  background: rgba(255,255,255,0.03);
 }
+
+.properties-float .prop-header:active {
+  cursor: grabbing;
+}
+
 
 .prop-content {
   padding: 0.75rem;
@@ -1499,10 +1479,6 @@ input:checked+.slider:before {
   50% { transform: translateY(-10px); }
 }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
 
 .animate-breathe { animation: breathe 3s ease-in-out infinite; }
 .animate-float { animation: float 3s ease-in-out infinite; }
@@ -1533,18 +1509,6 @@ input:checked+.slider:before {
   box-shadow: 0 20px 60px rgba(0,0,0,0.8);
 }
 
-.prop-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem;
-  border-bottom: 1px solid var(--border-glass);
-  font-weight: 600;
-  font-size: 0.9rem;
-  cursor: grab; /* Indicador de draggable */
-  user-select: none;
-  background: rgba(255,255,255,0.03);
-}
 
 .prop-header:active {
   cursor: grabbing;
@@ -1588,11 +1552,11 @@ input:checked+.slider:before {
   background: rgba(251, 191, 36, 0.05);
 }
 
-/* Indentación para elementos dentro de grupos */
 .layer-item.child {
   padding-left: 2rem;
   font-size: 0.8rem;
   opacity: 0.9;
+  position: relative;
 }
 
 /* Arrastrando sobre grupo (para drop) */
@@ -1624,10 +1588,7 @@ input:checked+.slider:before {
 }
 
 .library-sidebar[data-side="left"] {
-	width: 280px;
-	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
+  width: 280px !important;    
 }
 
 /* Fix grid de 2 columnas para TikTok y Minecraft */
@@ -1700,10 +1661,7 @@ input:checked+.slider:before {
   cursor: grabbing;
 }
 
-/* Asegurar que los hijos de grupos se vean indentados */
-.layer-item.child {
-  position: relative;
-}
+
 
 .layer-item.child::before {
   content: '';
@@ -1747,3 +1705,62 @@ input:checked+.slider:before {
 .animate-shake { animation: shake 0.5s ease-in-out infinite; }
 .animate-pulse { animation: pulse 1.5s ease-in-out infinite; }
 .animate-glow { animation: glow 2s ease-in-out infinite; }
+
+
+.layers-tree .layer-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.layers-tree .layer-item.selected {
+  background: rgba(56, 189, 248, 0.25);
+}
+
+/* INDENTACIÓN VISUAL PARA CAPAS EN GRUPO */
+.layers-tree .layer-item.in-group {
+  margin-left: 1.5rem;
+  border-left: 2px solid rgba(148, 163, 184, 0.5);
+}
+
+/* FILA DE GRUPO */
+.layers-tree .layer-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.4rem;
+  margin-top: 0.4rem;
+  border-radius: 4px;
+  background: rgba(148, 163, 184, 0.12);
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* HANDLE DE DRAG VISUAL */
+.layer-drag {
+  width: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--text-muted);
+}
+
+.layer-drag::before {
+  content: '⋮⋮';
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+
+.layer-drag {
+  cursor: grab;
+  padding: 0 4px;
+  opacity: 0.6;
+}
+.layer-drag:active {
+  cursor: grabbing;
+  opacity: 1;
+}
