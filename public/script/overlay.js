@@ -1,23 +1,85 @@
 let stage = null;
-let layer = null;
+let currentLayer = null;
 
+let overlayId = null;
+let lastOverlayHash = null;
+let isUpdating = false;
+let overlayPollHandle = null;
+
+// --------- Helpers de hash / comparación ---------
+function computeOverlayHash(overlay) {
+  if (!overlay) return '';
+
+  // Solo lo que afecta al render
+  const payload = {
+    canvas: overlay.canvas || {},
+    elements: overlay.elements || [],
+    groups: overlay.groups || []
+  };
+
+  return JSON.stringify(payload);
+}
+
+// --------- Init ---------
 async function initOverlay() {
   const parts = location.pathname.split('/');
-  const overlayId = parts[parts.length - 1] || 'default';
+  overlayId = parts[parts.length - 1] || 'default';
 
   try {
     const res = await fetch(`/api/overlays/${overlayId}`);
     if (!res.ok) throw new Error('Overlay no encontrado');
     const overlay = await res.json();
+
     window.__overlayConfig = overlay;
+
+    // Hash inicial
+    lastOverlayHash = computeOverlayHash(overlay);
+
     renderOverlayWithKonva(overlay);
+    startPolling();
   } catch (e) {
     console.error('Error cargando overlay:', e);
-    document.getElementById('overlayRoot').innerHTML =
-      '<div style="color:red;padding:2rem;">Error cargando overlay</div>';
+    const root = document.getElementById('overlayRoot');
+    if (root) {
+      root.innerHTML =
+        '<div style="color:red;padding:2rem;">Error cargando overlay</div>';
+    }
   }
 }
 
+// --------- Polling cada 5s usando /api/overlays/:id ---------
+function startPolling() {
+  if (overlayPollHandle) return; // evitar duplicar intervalos
+
+  overlayPollHandle = setInterval(async () => {
+    if (isUpdating || !overlayId) return;
+
+    try {
+      // Cache-buster con ?t=...
+      const res = await fetch(`/api/overlays/${overlayId}?t=${Date.now()}`);
+      if (!res.ok) {
+        // si el overlay ya no existe, no spameamos
+        return;
+      }
+
+      const newOverlay = await res.json();
+      const newHash = computeOverlayHash(newOverlay);
+
+      // Si cambió el contenido relevante, actualizamos
+      if (lastOverlayHash && newHash !== lastOverlayHash) {
+        console.log('🔄 Overlay cambiado, actualizando con crossfade...');
+        await updateOverlayWithCrossfade(newOverlay);
+        lastOverlayHash = newHash;
+      } else if (!lastOverlayHash) {
+        lastOverlayHash = newHash;
+      }
+    } catch (e) {
+      console.error('Error en polling de overlay:', e);
+    }
+  }, 5000);
+}
+
+// --------- Render inicial ---------
 function renderOverlayWithKonva(overlay) {
   const container = document.getElementById('overlayStageContainer');
   if (!container) return;
@@ -25,15 +87,11 @@ function renderOverlayWithKonva(overlay) {
   const logicalW = overlay.canvas?.width  || 1080;
   const logicalH = overlay.canvas?.height || 1920;
 
-  // Limpiar stage anterior si existe
   if (stage) {
     stage.destroy();
-    stage = null;
-    layer = null;
   }
   container.innerHTML = '';
 
-  // Crear Stage lógico
   stage = new Konva.Stage({
     container: 'overlayStageContainer',
     width: logicalW,
@@ -41,10 +99,188 @@ function renderOverlayWithKonva(overlay) {
     pixelRatio: window.devicePixelRatio || 1,
   });
 
-  layer = new Konva.Layer();
-  stage.add(layer);
+  currentLayer = new Konva.Layer();
+  stage.add(currentLayer);
 
-  // Escalar todo para encajar en la ventana de OBS
+  applyScale(container, logicalW, logicalH);
+  loadElementsToLayer(overlay, currentLayer);
+  currentLayer.draw();
+}
+
+// --------- Actualización suave con crossfade ---------
+async function updateOverlayWithCrossfade(newOverlay) {
+  if (!stage || isUpdating) return;
+  isUpdating = true;
+
+  const logicalW = newOverlay.canvas?.width || 1080;
+  const logicalH = newOverlay.canvas?.height || 1920;
+
+  // Si cambian dimensiones, actualizamos stage y escala
+  if (stage.width() !== logicalW || stage.height() !== logicalH) {
+    stage.size({ width: logicalW, height: logicalH });
+    const container = document.getElementById('overlayStageContainer');
+    if (container) applyScale(container, logicalW, logicalH);
+  }
+
+  // 1. Nueva capa, inicialmente invisible
+  const newLayer = new Konva.Layer({ opacity: 0 });
+  stage.add(newLayer);
+
+  // 2. Cargar elementos en la nueva capa (esperando imágenes)
+  await loadElementsToLayerAsync(newOverlay, newLayer);
+
+  // 3. Crossfade entre capas
+  const fadeDuration = 0.3; // segundos
+
+  newLayer.to({
+    opacity: 1,
+    duration: fadeDuration,
+    easing: Konva.Easings.EaseInOut,
+  });
+
+  currentLayer.to({
+    opacity: 0,
+    duration: fadeDuration,
+    easing: Konva.Easings.EaseInOut,
+    onFinish: () => {
+      currentLayer.destroy();
+      currentLayer = newLayer;
+      window.__overlayConfig = newOverlay;
+      isUpdating = false;
+      console.log('✅ Actualización completa');
+    }
+  });
+}
+
+// --------- Carga de elementos (sync) ---------
+function loadElementsToLayer(overlay, targetLayer) {
+  const elements = Array.isArray(overlay.elements) ? overlay.elements : [];
+
+  elements
+    .slice()
+    .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0))
+    .forEach(el => {
+      if (!el || el.hidden) return;
+      createElement(el, targetLayer);
+    });
+}
+
+// --------- Carga de elementos (async para crossfade) ---------
+async function loadElementsToLayerAsync(overlay, targetLayer) {
+  const elements = Array.isArray(overlay.elements) ? overlay.elements : [];
+  const sorted = elements.slice().sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+
+  const promises = sorted.map(el => {
+    if (!el || el.hidden) return Promise.resolve();
+    return createElementAsync(el, targetLayer);
+  });
+
+  await Promise.all(promises);
+}
+
+// --------- Crear elemento (sync) ---------
+function createElement(el, targetLayer) {
+  if (el.type === 'text') {
+    const text = new Konva.Text({
+      x: el.x,
+      y: el.y,
+      text: el.text || '',
+      fontSize: el.fontSize || 24,
+      fontFamily: el.fontFamily || 'Inter',
+      fill: el.color || 'white',
+      opacity: (el.opacity ?? 100) / 100,
+      rotation: el.rotation || 0,
+    });
+    text.meta = el;
+    targetLayer.add(text);
+    applyBaseAnimationRuntime(text);
+  } else if (el.src) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const konvaImg = new Konva.Image({
+        x: el.x,
+        y: el.y,
+        image: img,
+        width: el.width || img.width,
+        height: el.height || img.height,
+        opacity: (el.opacity ?? 100) / 100,
+        rotation: el.rotation || 0,
+      });
+      if (el.borderWidth && el.borderWidth > 0) {
+        konvaImg.stroke(el.borderColor || '#06b6d4');
+        konvaImg.strokeWidth(el.borderWidth);
+      }
+      konvaImg.meta = el;
+      targetLayer.add(konvaImg);
+      applyBaseAnimationRuntime(konvaImg);
+      targetLayer.batchDraw();
+    };
+    img.src = el.src;
+  } else if (el.type === 'rect') {
+    const rect = new Konva.Rect({
+      x: el.x,
+      y: el.y,
+      width: el.width || 200,
+      height: el.height || 200,
+      fill: el.backgroundColor || 'transparent',
+      stroke: el.borderColor || '#06b6d4',
+      strokeWidth: el.borderWidth ?? 2,
+      opacity: (el.opacity ?? 100) / 100,
+      rotation: el.rotation || 0,
+    });
+    rect.meta = el;
+    targetLayer.add(rect);
+    applyBaseAnimationRuntime(rect);
+  }
+}
+
+// --------- Crear elemento (async) ---------
+function createElementAsync(el, targetLayer) {
+  return new Promise((resolve) => {
+    if (!el || el.hidden) {
+      resolve();
+      return;
+    }
+
+    if (el.type === 'text') {
+      createElement(el, targetLayer);
+      resolve();
+    } else if (el.src) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const konvaImg = new Konva.Image({
+          x: el.x,
+          y: el.y,
+          image: img,
+          width: el.width || img.width,
+          height: el.height || img.height,
+          opacity: (el.opacity ?? 100) / 100,
+          rotation: el.rotation || 0,
+        });
+        if (el.borderWidth && el.borderWidth > 0) {
+          konvaImg.stroke(el.borderColor || '#06b6d4');
+          konvaImg.strokeWidth(el.borderWidth);
+        }
+        konvaImg.meta = el;
+        targetLayer.add(konvaImg);
+        applyBaseAnimationRuntime(konvaImg);
+        resolve();
+      };
+      img.onerror = () => resolve();
+      img.src = el.src;
+    } else if (el.type === 'rect') {
+      createElement(el, targetLayer);
+      resolve();
+    } else {
+      resolve();
+    }
+  });
+}
+
+// --------- Escala al tamaño de la ventana ---------
+function applyScale(container, logicalW, logicalH) {
   const scale = Math.min(
     window.innerWidth  / logicalW,
     window.innerHeight / logicalH
@@ -52,98 +288,13 @@ function renderOverlayWithKonva(overlay) {
   container.style.transform = `scale(${scale})`;
   container.style.left = `${(window.innerWidth  - logicalW * scale) / 2}px`;
   container.style.top  = `${(window.innerHeight - logicalH * scale) / 2}px`;
-
-  loadElementsToStageRuntime(overlay);
-  layer.draw();
 }
 
-// Versión recortada de tu loadElementsToStage del editor
-function loadElementsToStageRuntime(overlay) {
-  if (!layer) return;
-  layer.destroyChildren();
-
-  const logicalW = overlay.canvas?.width  || 1080;
-  const logicalH = overlay.canvas?.height || 1920;
-
-  // Marco opcional (si quieres)
-  // const frame = new Konva.Rect({ x:0, y:0, width:logicalW, height:logicalH, listening:false });
-  // layer.add(frame);
-
-  const elements = Array.isArray(overlay.elements) ? overlay.elements : [];
-
-  elements
-    .slice()
-    .sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)) // mismo orden que editor
-    .forEach(el => {
-      if (!el || el.hidden) return;
-
-      if (el.type === 'text') {
-        const text = new Konva.Text({
-          x: el.x,
-          y: el.y,
-          text: el.text || '',
-          fontSize: el.fontSize || 24,
-          fontFamily: el.fontFamily || 'Inter',
-          fill: el.color || 'white',
-          opacity: (el.opacity ?? 100) / 100,
-          rotation: el.rotation || 0,
-        });
-        text.meta = el;
-        layer.add(text);
-        applyBaseAnimationRuntime(text); // misma animación base
-      } else if (el.src) {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          let w = el.width || img.width;
-          let h = el.height || img.height;
-          const konvaImg = new Konva.Image({
-            x: el.x,
-            y: el.y,
-            image: img,
-            width: w,
-            height: h,
-            opacity: (el.opacity ?? 100) / 100,
-            rotation: el.rotation || 0,
-          });
-          konvaImg.meta = el;
-
-          // Borde si existe
-          if (el.borderWidth && el.borderWidth > 0) {
-            konvaImg.stroke(el.borderColor || '#06b6d4');
-            konvaImg.strokeWidth(el.borderWidth);
-          }
-
-          layer.add(konvaImg);
-          applyBaseAnimationRuntime(konvaImg);
-          layer.batchDraw();
-        };
-        img.src = el.src;
-      } else if (el.type === 'rect') {
-        const rect = new Konva.Rect({
-          x: el.x,
-          y: el.y,
-          width: el.width || 200,
-          height: el.height || 200,
-          fill: el.backgroundColor || 'transparent',
-          stroke: el.borderColor || '#06b6d4',
-          strokeWidth: el.borderWidth ?? 2,
-          opacity: (el.opacity ?? 100) / 100,
-          rotation: el.rotation || 0,
-        });
-        rect.meta = el;
-        layer.add(rect);
-        applyBaseAnimationRuntime(rect);
-      }
-    });
-}
-
-// Copia casi literal de tu applyBaseAnimation del editor [file:37]
+// --------- Animaciones base (igual que tu editor) ---------
 function applyBaseAnimationRuntime(shape) {
   const m = shape.meta;
-  if (!m || !layer) return;
+  if (!m || !shape.getLayer()) return;
 
-  // Parar animación anterior si existe
   if (shape.baseAnimation) {
     shape.baseAnimation.stop();
     shape.baseAnimation = null;
@@ -151,21 +302,8 @@ function applyBaseAnimationRuntime(shape) {
 
   const type = m.animationBase || m.animation;
   const duration = (m.animationDurationSec ?? 3);
+  if (!type) return;
 
-  // Si no hay animación, restaurar estado base si lo tenemos
-  if (!type) {
-    const state = shape.baseAnimState;
-    if (state) {
-      shape.position({ x: state.x, y: state.y });
-      shape.scaleX(state.scaleX);
-      shape.scaleY(state.scaleY);
-      shape.opacity(state.opacity);
-      layer.batchDraw();
-    }
-    return;
-  }
-
-  // Guardar estado base solo la primera vez
   if (!shape.baseAnimState) {
     shape.baseAnimState = {
       x: shape.x(),
@@ -183,7 +321,7 @@ function applyBaseAnimationRuntime(shape) {
   const anim = new Konva.Animation(frame => {
     if (!frame) return;
     const t = frame.time % period;
-    const p = t / period; // 0..1
+    const p = t / period;
 
     switch (type) {
       case 'breathe': {
@@ -210,18 +348,21 @@ function applyBaseAnimationRuntime(shape) {
         shape.opacity(base.opacity * v);
         break;
       }
-      default:
-        break;
     }
-  }, layer);
+  }, shape.getLayer());
 
   shape.baseAnimation = anim;
   anim.start();
 }
 
+// --------- Eventos globales ---------
 window.addEventListener('load', initOverlay);
+
 window.addEventListener('resize', () => {
   if (window.__overlayConfig) {
-    renderOverlayWithKonva(window.__overlayConfig);
+    const container = document.getElementById('overlayStageContainer');
+    const logicalW = window.__overlayConfig.canvas?.width  || 1080;
+    const logicalH = window.__overlayConfig.canvas?.height || 1920;
+    if (container) applyScale(container, logicalW, logicalH);
   }
 });
