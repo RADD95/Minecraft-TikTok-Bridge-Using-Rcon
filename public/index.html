@@ -416,9 +416,14 @@
                                 <i class="fa-solid fa-hand"></i>
                             </button>
                             <div class="toolbar-separator"></div>
-                            <button class="btn btn-secondary" data-tool="rect" title="Añadir borde">
+                            <button class="btn btn-secondary" data-tool="rect" title="Añadir rectángulo">
                                 <i class="fa-regular fa-square"></i>
                             </button>
+                            <button class="btn btn-secondary" id="btnAddExternalImage" title="Añadir imagen externa">
+                                <i class="fa-regular fa-image"></i>
+                            </button>
+
+                            <input type="file" id="externalImageFileInput" accept="image/*" style="display:none;">
                             <button class="btn btn-secondary" data-tool="text" title="Texto (T)">
                                 <i class="fa-solid fa-font"></i>
                             </button>
@@ -460,12 +465,11 @@
                     <!-- Layout Principal 3 columnas -->
                     <div class="photopea-workspace">
 
-                        <!-- Panel Izquierdo: -->
+                        <!-- Panel Izquierdo -->
                         <aside class="library-sidebar" data-side="left"
                             style="width: 520px; display: grid; grid-template-columns: 1fr 1fr; gap: 0; overflow: hidden;">
                             <!-- Panel TikTok (Izquierda) -->
-                            <div
-                                style="display: flex; flex-direction: column; border-right: 1px solid var(--border-glass); overflow: hidden;">
+                            <div class="overlay-column overlay-column-gifts">
                                 <div class="panel-header">
                                     <i class="fa-brands fa-tiktok" style="color: var(--accent-tt);"></i>
                                     <span>TikTok Gifts</span>
@@ -474,9 +478,12 @@
                                             oninput="overlayApp.filterLibrary('gifts')">
                                     </div>
                                 </div>
-                                <div id="giftLibrary" class="library-grid"
-                                    style="grid-template-columns: repeat(1, 1fr);">
-                                    <!-- Items -->
+
+                                <!-- ESTE es el contenedor que va a scrollear -->
+                                <div class="library-scroll">
+                                    <div id="giftLibrary" class="library-grid">
+                                        <!-- JS mete aquí TODOS los .library-item -->
+                                    </div>
                                 </div>
                             </div>
 
@@ -496,6 +503,7 @@
                                 </div>
                             </div>
                         </aside>
+
 
                         <!-- Canvas Central -->
                         <div class="canvas-area" id="canvasArea">
@@ -570,15 +578,30 @@
                             <!-- Propiedades de capa (elemento) -->
                             <div id="props-element" class="prop-section" style="display:none;">
                                 <!-- Posición y opacidad -->
+                                <!-- Posición, tamaño y opacidad -->
                                 <div class="prop-section">
+                                    <!-- POSICIÓN -->
                                     <div class="prop-row">
                                         <label>Posición</label>
                                         <input type="number" id="propX" placeholder="X"
                                             onchange="overlayApp.onPropChange('x', this.value)">
                                         <input type="number" id="propY" placeholder="Y"
                                             onchange="overlayApp.onPropChange('y', this.value)">
+                                        <input type="number" id="propRotation" placeholder="Rot" step="1"
+                                            onchange="overlayApp.onPropChange('rotation', this.value)">
                                     </div>
 
+
+                                    <!-- TAMAÑO -->
+                                    <div class="prop-row">
+                                        <label>Tamaño</label>
+                                        <input type="number" id="propWidth" placeholder="W" min="1"
+                                            onchange="overlayApp.onPropChange('width', this.value)">
+                                        <input type="number" id="propHeight" placeholder="H" min="1"
+                                            onchange="overlayApp.onPropChange('height', this.value)">
+                                    </div>
+
+                                    <!-- OPACIDAD -->
                                     <div class="prop-row">
                                         <label>Opacidad</label>
                                         <input type="range" id="propOpacity" min="0" max="100"
@@ -586,10 +609,10 @@
                                     </div>
                                 </div>
 
+
                                 <!-- Estilo básico (rect / grupos) -->
-                                <!-- Estilo básico rect -->
                                 <div class="prop-section">
-                                    <div class="prop-row">
+                                    <div class="prop-row" id="propBgRow">
                                         <label>Fondo</label>
                                         <input type="color" id="propBgColor"
                                             oninput="overlayApp.onPropChange('bgColor', this.value)">
@@ -597,6 +620,7 @@
                                             oninput="overlayApp.onPropChange('bgAlpha', this.value)"
                                             title="Transparencia fondo (%)">
                                     </div>
+
 
                                     <div class="prop-row">
                                         <label>Borde</label>
@@ -646,6 +670,17 @@
                                             title="Transparencia texto (%)"
                                             oninput="overlayApp.onPropChange('textAlpha', this.value)">
                                     </div>
+                                    <div class="prop-row" style="margin-top:0.5rem;">
+                                        <label>Alineación</label>
+                                        <select id="propTextAlign"
+                                            onchange="overlayApp.onPropChange('textAlign', this.value)">
+                                            <option value="left">Izquierda</option>
+                                            <option value="center">Centro</option>
+                                            <option value="right">Derecha</option>
+                                        </select>
+                                    </div>
+
+
                                 </div>
 
                                 <!-- Animación base / por capa -->

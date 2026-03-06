@@ -1,31 +1,153 @@
 /* ==============================
    Overlay Editor – Panel flotante
    ============================== */
+/* ==============================
+   Panel de Propiedades Flotante
+   ============================== */
 
+/* Contenedor del panel */
+#propertiesPanel.properties-float {
+    position: fixed;
+    top: 100px;
+    right: 300px;
+    width: 260px;
+    max-height: 80vh;
 
-/* Header del panel: título + X en la misma línea */
-.properties-float .prop-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.45rem 0.7rem;
+    background: rgba(15, 23, 42, 0.98);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-md);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+
+    display: flex;
+    flex-direction: column;
 }
 
-.properties-float .prop-header span {
-  font-size: 0.85rem;
-  font-weight: 600;
+/* Cabecera (título + X, drag) */
+#propertiesPanel .prop-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.45rem 0.7rem;
+    cursor: grab;
+    user-select: none;
+    background: rgba(255,255,255,0.03);
+}
+
+#propertiesPanel .prop-header span {
+    font-size: 0.85rem;
+    font-weight: 600;
 }
 
 /* Botón X pegado a la derecha */
-.properties-float .prop-header .btn-icon {
-  margin-left: auto;
-  flex-shrink: 0;
+#propertiesPanel .prop-header .btn-icon {
+    margin-left: auto;
+    flex-shrink: 0;
 }
 
-/* Ancho del panel (un poco más cómodo) */
-#propertiesPanel.properties-float {
-  width: 260px;
+/* Zona scrolleable principal de propiedades */
+#propertiesPanel .prop-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* Layout específico de filas dentro del panel */
+#propertiesPanel .prop-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* El label ocupa toda la fila superior */
+#propertiesPanel .prop-row > label {
+    flex: 0 0 100%;
+    min-width: 0;
+    font-size: 0.75rem;
+}
+
+/* Inputs / selects se reparten el ancho en la fila inferior */
+#propertiesPanel .prop-row > input,
+#propertiesPanel .prop-row > select,
+#propertiesPanel .prop-row > textarea {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+}
+
+/* Posición X/Y: anchos concretos */
+#propertiesPanel #propX,
+#propertiesPanel #propY {
+    flex: 0 0 auto;
+    width: 90px;
+    max-width: 90px;
+}
+
+/* Grosor de borde: numérico compacto */
+#propertiesPanel #propBorderWidth {
+    flex: 0 0 60px;
+    max-width: 60px;
+}
+
+/* Colores pequeños, para no comer todo el ancho */
+#propertiesPanel #propBgColor,
+#propertiesPanel #propBorderColor,
+#propertiesPanel #propTextColor {
+    flex: 0 0 40px;
+    width: 40px;
+}
+
+/* Sliders de alpha que se estiren */
+#propertiesPanel #propBgAlpha,
+#propertiesPanel #propBorderAlpha,
+#propertiesPanel #propTextAlpha {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/* Texto: textarea resizable solo vertical */
+#propertiesPanel #textEditorSection textarea {
+    resize: vertical;
+}
+
+/* Select de fuente ocupa bien el espacio */
+#propertiesPanel #textEditorSection select#propFontFamily {
+    min-width: 0;
+}
+
+/* Animación y trigger: selects a ancho completo */
+#propertiesPanel select#propAnimation,
+#propertiesPanel select#propTrigger {
+    width: 100%;
+}
+
+/* Duración de animación compacta */
+#propertiesPanel input#propAnimDuration {
+  width: 60px;
+  padding: 0.3rem;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border-glass);
+  border-radius: 4px;
+  color: white;
+  font-size: 0.8rem;
+}
+
+
+#propertiesPanel input#propFontSize {
+  width: 60px;
+  padding: 0.3rem;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border-glass);
+  border-radius: 4px;
+  color: white;
+  font-size: 0.8rem;
 }
 
 
@@ -39,9 +161,6 @@
   width: 100px !important;
 }
 
-#propertiesPanel .prop-row input[type="number"] {
-  width: 90px !important;
-}
 
 #propertiesPanel .prop-row #propX,
 #propertiesPanel .prop-row #propY {
@@ -130,6 +249,14 @@
   flex: 1 1 0;
   max-width: 90px;
 }
+
+/* Tamaño W/H: mismo estilo que X/Y */
+#propertiesPanel #propWidth,
+#propertiesPanel #propHeight {
+    flex: 1 1 0;
+    max-width: 90px;
+}
+
 
 /* Colores pequeños, para no comer todo el ancho */
 #propertiesPanel #propBgColor,
@@ -405,6 +532,7 @@
   color: white;
   font-size: 0.8rem;
 }
+
 
 .prop-section {
   border-top: 1px solid var(--border-glass);
@@ -788,4 +916,69 @@
 .layer-drag:active {
   cursor: grabbing;
   opacity: 1;
+}
+
+/* =========================================
+   FIX SCROLL: TikTok Gifts + Minecraft (izquierda)
+   ========================================= */
+
+/* Forzamos flex en el aside de la izquierda, por encima del inline grid */
+.overlay-photopea .library-sidebar[data-side="left"] {
+    width: 350px !important;          /* Aumenta si lo quieres más grande */
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+}
+
+/* Cada columna (TikTok y Minecraft) ocupa toda la altura disponible */
+.overlay-photopea .library-sidebar[data-side="left"] > div {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Borde separador para la columna de TikTok */
+.overlay-photopea .overlay-column-gifts {
+    border-right: 1px solid var(--border-glass);
+}
+
+/* Contenedor que SÍ tiene scroll en TikTok */
+.overlay-photopea .overlay-column-gifts .library-scroll {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* Contenedor que SÍ tiene scroll en Minecraft */
+.overlay-photopea .library-sidebar[data-side="left"] #renderLibrary {
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* La grilla interna solo define el layout, no el scroll */
+.overlay-photopea .library-grid {
+    overflow-y: visible;
+}
+
+/* =========================================
+   FIX LABELS: que se vean los nombres
+   ========================================= */
+
+/* Permitir que cada item crezca en altura si el texto es largo */
+.overlay-photopea .library-sidebar[data-side="left"] .library-item {
+    align-items: center;
+}
+
+/* El texto del nombre puede ocupar 2+ líneas, sin cortarse */
+.overlay-photopea .library-sidebar[data-side="left"] .library-item .item-label {
+    position: static;
+    flex: 1;
+    text-align: left;
+    background: none;
+    font-size: 0.75rem;
+    white-space: normal;              /* ya NO forzamos una sola línea */
+    overflow: visible;                /* sin recorte */
+    text-overflow: clip;
+    line-height: 1.2;
 }

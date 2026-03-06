@@ -153,33 +153,32 @@ const OverlayEditor = {
   },
 
   // --------- Lista de overlays (tarjetas) ---------
-renderOverlayList() {
-  const grid  = document.getElementById('overlaysGrid');
-  const count = document.getElementById('overlayCount');
-  if (!grid) return;
+  renderOverlayList() {
+    const grid = document.getElementById('overlaysGrid');
+    const count = document.getElementById('overlayCount');
+    if (!grid) return;
 
-  if (count) count.textContent = this.overlays.length;
+    if (count) count.textContent = this.overlays.length;
 
-  if (this.overlays.length === 0) {
-    grid.innerHTML = `
+    if (this.overlays.length === 0) {
+      grid.innerHTML = `
       <div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:3rem;">
         <i class="fa-solid fa-layer-group" style="font-size:2rem;margin-bottom:1rem;opacity:0.5"></i>
         <div>No hay overlays configurados</div>
       </div>
     `;
-    return;
-  }
+      return;
+    }
 
-  grid.innerHTML = this.overlays.map(ovl => `
+    grid.innerHTML = this.overlays.map(ovl => `
     <div class="overlay-preview-card" onclick="OverlayEditor.editOverlay('${ovl.id}')">
       <div class="overlay-thumb" style="background:#1a1a2e;position:relative;overflow:hidden;">
-        ${
-          ovl.preview
-            ? `<img src="${ovl.preview}"
+        ${ovl.preview
+        ? `<img src="${ovl.preview}"
                     alt="${ovl.name || 'Overlay'}"
                     style="width:100%;height:100%;object-fit:contain;display:block;" />`
-            : ''
-        }
+        : ''
+      }
       </div>
       <div class="overlay-info">
         <div class="overlay-title">${ovl.name || 'Sin nombre'}</div>
@@ -198,7 +197,7 @@ renderOverlayList() {
       </div>
     </div>
   `).join('');
-},
+  },
 
 
   copyOverlayUrl(id) {
@@ -440,8 +439,15 @@ renderOverlayList() {
       const target = e.target;
       const evt = e.evt || e;
 
-      // Click en fondo -> limpiar selección
+      const prevNodes = this.transformer.nodes() || [];
+
+      // Click en fondo -> limpiar selección y reanudar animaciones
       if (target === this.stage) {
+        // Reanudar animaciones de todo lo que estaba seleccionado
+        prevNodes.forEach(node => {
+          this.resumeShapeAnimation(node);
+        });
+
         this.selectedElementId = null;
         this.transformer.nodes([]);
         this.updatePropertiesPanel(null);
@@ -454,7 +460,7 @@ renderOverlayList() {
       if (!target._meta) return;
 
       const shape = target;
-      const nodes = this.transformer.nodes() || [];
+      let nodes = this.transformer.nodes() || [];
 
       if (evt.ctrlKey || evt.metaKey) {
         // Multi‑select: toggle en el array de nodos del Transformer
@@ -476,14 +482,28 @@ renderOverlayList() {
         }
       } else {
         // Selección simple (sin Ctrl)
-        this.transformer.nodes([shape]);
+        nodes = [shape];
+        this.transformer.nodes(nodes);
         this.selectedElementId = shape._meta?.id || null;
         this.updatePropertiesPanel(shape);
       }
 
+      // Pausar animación en todos los nodos seleccionados
+      nodes.forEach(node => {
+        this.pauseShapeAnimation(node);
+      });
+
+      // Reanudar animaciones en todo lo que estaba antes seleccionado y ya NO lo está
+      prevNodes.forEach(node => {
+        if (!nodes.includes(node)) {
+          this.resumeShapeAnimation(node);
+        }
+      });
+
       this.renderLayersTree();
       this.layer && this.layer.batchDraw();
     });
+
 
 
 
@@ -653,17 +673,29 @@ renderOverlayList() {
           fill: el.color || 'white',
           opacity: (el.opacity ?? 100) / 100,
           rotation: el.rotation || 0,
-          scaleX: el.scaleX || 1,
-          scaleY: el.scaleY || 1,
+          // Caja de texto
+          width:  typeof el.width  === 'number' ? el.width  : undefined,
+          height: typeof el.height === 'number' ? el.height : undefined,
+          align: el.align || 'left',
         });
 
         text.meta = el;
         text._meta = el;
 
+        // Guardar base para futuros transforms
+        if (!el.fontSize) el.fontSize = text.fontSize();
+        if (!el.width) el.width = text.width();
+
+        // APLICAR BORDE si hay datos guardados en el meta
+        this.applyBorderToShape(text, el);
+
         this.makeDraggable(text);
         this.layer.add(text);
         this.applyBaseAnimation(text);
       }
+
+
+
       else if (el.src) {
         this.addImageFromElement(el);
       }
@@ -822,7 +854,8 @@ renderOverlayList() {
         const shape = this.findShapeByElementId(id);
         if (!shape || !this.transformer) return;
 
-        const nodes = this.transformer.nodes() || [];
+        const prevNodes = this.transformer.nodes() || [];
+        let nodes = this.transformer.nodes() || [];
 
         if (e.ctrlKey || e.metaKey) {
           const idx = nodes.indexOf(shape);
@@ -841,10 +874,23 @@ renderOverlayList() {
             this.updatePropertiesPanel(null);
           }
         } else {
-          this.transformer.nodes([shape]);
+          nodes = [shape];
+          this.transformer.nodes(nodes);
           this.selectedElementId = id;
           this.updatePropertiesPanel(shape);
         }
+
+        // Pausar animación en todos los nodos seleccionados
+        nodes.forEach(node => {
+          this.pauseShapeAnimation(node);
+        });
+
+        // Reanudar animaciones en lo que estaba seleccionado antes y ya no lo está
+        prevNodes.forEach(node => {
+          if (!nodes.includes(node)) {
+            this.resumeShapeAnimation(node);
+          }
+        });
 
         this.renderLayersTree();
         this.layer && this.layer.batchDraw();
@@ -893,6 +939,52 @@ renderOverlayList() {
     const children = this.layer.getChildren(node => !!node._meta);
     return children.find(node => node._meta?.id === id) || null;
   },
+
+  pauseShapeAnimation(shape) {
+    if (!shape) return;
+
+    const m = shape._meta || shape.meta;
+    if (!m || !m.animationBase) return; // si no tiene animación, nada
+
+    // Aseguramos tener un estado base
+    if (!shape.baseAnimState) {
+      shape.baseAnimState = {
+        x: shape.x(),
+        y: shape.y(),
+        scaleX: shape.scaleX(),
+        scaleY: shape.scaleY(),
+        opacity: shape.opacity()
+      };
+    }
+
+    // Parar animación si existe
+    if (shape.baseAnimation) {
+      shape.baseAnimation.stop();
+    }
+
+    // Dejar el shape exactamente en su estado base (quieto)
+    const s = shape.baseAnimState;
+    shape.position({ x: s.x, y: s.y });
+    shape.scaleX(s.scaleX);
+    shape.scaleY(s.scaleY);
+    shape.opacity(s.opacity);
+  },
+
+  resumeShapeAnimation(shape) {
+    if (!shape) return;
+
+    const m = shape._meta || shape.meta;
+    if (!m || !m.animationBase) return; // sin animación configurada
+
+    // Si ya tiene animación creada, solo reanudar
+    if (shape.baseAnimation) {
+      shape.baseAnimation.start();
+    } else if (this.applyBaseAnimation) {
+      // Crear de nuevo la animación desde su estado base
+      this.applyBaseAnimation(shape);
+    }
+  },
+
 
   selectElementById(id) {
     this.selectedGroupId = null;
@@ -1069,7 +1161,14 @@ renderOverlayList() {
         opacity: (el.opacity ?? 100) / 100,
         rotation: el.rotation || 0
       });
+
+      // Normalizar meta
+      konvaImg.meta = el;
       konvaImg._meta = el;
+
+      // APLICAR BORDE si existe en el meta
+      this.applyBorderToShape(konvaImg, el);
+
       this.makeDraggable(konvaImg);
       this.layer.add(konvaImg);
       this.applyBaseAnimation(konvaImg);
@@ -1079,12 +1178,18 @@ renderOverlayList() {
   },
 
 
+
   makeDraggable(shape) {
     // 1) Hacer draggable
     shape.draggable(true);
 
     // 2) Al empezar a arrastrar, seleccionarlo
     shape.on('dragstart', () => {
+      if (shape._baseAnimation) {
+        shape._baseAnimation.stop();
+        shape._animWasRunning = true; // recordatorio para reanudar luego
+      }
+
       const nodes = this.transformer?.nodes?.() || [];
       const isMulti = nodes.length > 1 && nodes.includes(shape);
 
@@ -1100,7 +1205,7 @@ renderOverlayList() {
       this.layer && this.layer.batchDraw();
     });
 
-
+    // 3) Drag de posición (grupo o shape suelto)
     shape.on('dragmove', () => {
       const nodes = this.transformer?.nodes?.() || [];
       const isMulti = nodes.length > 1 && nodes.includes(shape);
@@ -1167,12 +1272,11 @@ renderOverlayList() {
       this.layer && this.layer.batchDraw();
     });
 
-
-
-
-    shape.ondragend = (e) => {
+    // 4) Reordenar zIndex al terminar un drag (tu lógica original)
+    shape.ondragend = () => {
       const layer = OverlayEditor.layer;
       const shapes = layer.children.filter(n => n.meta);
+
       shapes.sort((a, b) => a.getY() - b.getY() || a.getX() - b.getX());
 
       layer.children.forEach(child => layer.remove(child));
@@ -1186,56 +1290,72 @@ renderOverlayList() {
       layer.batchDraw();
     };
 
-    // Doble click en texto -> input inline para editar
+    // 5) Doble click en texto -> input inline para editar (igual que ya tenías)
     shape.on('dblclick dbltap', () => {
       if (shape._meta?.type !== 'text') return;
 
+      // Rect del texto en coordenadas de la escena (incluye baseScale de Konva)
       const rect = shape.getClientRect();
-      const baseScale = OverlayEditor.baseScale || 1; // ← DIVIDIR por scale del stage
+
+      const stage = OverlayEditor.stage;
+      const container = stage.container();
+      // El <canvas> interno de Konva (incluye translate/scale CSS: pan + viewScale)
+      const canvas = container.querySelector('canvas');
+      const canvasRect = canvas.getBoundingClientRect();
+
+      const viewScale = OverlayEditor.viewScale || 1;
+
+      // Posición final en pantalla (canvas ya trae el pan)
+      const left = canvasRect.left + window.scrollX + rect.x * viewScale;
+      const top = canvasRect.top + window.scrollY + rect.y * viewScale;
+      const width = rect.width * viewScale;
+      const height = rect.height * viewScale;
+
       const input = document.createElement('input');
       input.type = 'text';
       input.value = shape.text();
       input.style.cssText = `
-    position: absolute;
-    left: ${(rect.x + OverlayEditor.stage.getAbsolutePosition().x) / baseScale}px;
-    top: ${(rect.y + OverlayEditor.stage.getAbsolutePosition().y) / baseScale}px;
-    width: ${rect.width / baseScale}px;
-    height: ${rect.height / baseScale}px;
-    font-size: ${shape.fontSize()}px;
-    font-family: ${shape.fontFamily() || 'Inter'};
-    color: ${shape.fill()};
-    background: transparent;
-    border: 2px solid #06b6d4;
-    border-radius: 4px;
-    padding: 0;
-    margin: 0;
-    outline: none;
-    text-align: left;
-    z-index: 10000;
-    box-sizing: border-box;
-    cursor: text;
-  `;
+        position: absolute;
+        left: ${left}px;
+        top: ${top}px;
+        width: ${width}px;
+        height: ${height}px;
+        font-size: ${shape.fontSize()}px;
+        font-family: ${shape.fontFamily() || 'Inter'};
+        color: ${shape.fill()};
+        background: transparent;
+        border: 2px solid #06b6d4;
+        border-radius: 4px;
+        padding: 0;
+        margin: 0;
+        outline: none;
+        text-align: left;
+        z-index: 10000;
+        box-sizing: border-box;
+        cursor: text;
+      `;
 
       document.body.appendChild(input);
       input.focus();
       input.select();
 
-      // ← NUEVO: ancho dinámico
+      // Ancho dinámico mientras escribes
       input.oninput = () => {
         const tempSpan = document.createElement('span');
         tempSpan.style.cssText = `
-      position: absolute; visibility: hidden;
-      font-size: ${shape.fontSize()}px;
-      font-family: ${shape.fontFamily() || 'Inter'};
-      white-space: pre;
-    `;
+          position: absolute; visibility: hidden;
+          font-size: ${shape.fontSize()}px;
+          font-family: ${shape.fontFamily() || 'Inter'};
+          white-space: pre;
+        `;
         tempSpan.textContent = input.value || ' ';
         document.body.appendChild(tempSpan);
         const newWidth = tempSpan.offsetWidth + 10;
         document.body.removeChild(tempSpan);
-        input.style.width = `${Math.max(newWidth, rect.width / baseScale)}px`;
+        input.style.width = `${Math.max(newWidth, width)}px`;
       };
 
+      // Ocultar el texto de Konva mientras editas
       shape.visible(false);
 
       const commitEdit = () => {
@@ -1243,11 +1363,11 @@ renderOverlayList() {
 
         const newText = input.value || '';
         shape.text(newText);
-        shape.fontSize(shape.fontSize()); // ← FIJA: mantener fontSize
+        shape.fontSize(shape.fontSize()); // mantener fontSize actual
         shape._meta.text = newText;
-        shape._meta.fontSize = shape.fontSize(); // ← GUARDAR fontSize
+        shape._meta.fontSize = shape.fontSize();
         shape.visible(true);
-        OverlayEditor.updatePropertiesPanel(shape); // ← this → OverlayEditor
+        OverlayEditor.updatePropertiesPanel(shape);
         OverlayEditor.layer.draw();
         OverlayEditor.pushHistory && OverlayEditor.pushHistory();
 
@@ -1276,64 +1396,175 @@ renderOverlayList() {
           commitEdit();
         }
       };
+
+      // Evitar que el click cierre la selección de Konva
       input.onclick = e => e.stopPropagation();
     });
 
-
+    // 6) Transform del texto: SOLO caja (width/height), nunca fontSize
     shape.on('transform', () => {
       if (shape._meta?.type !== 'text') return;
 
-      const stage = OverlayEditor.stage;
-      const pointer = stage.getPointerPosition();
-      const tr = shape.getStage()?.findOne('Transformer');
-      const anchor = tr?.anchor || '';
+      const stage = shape.getStage();
+      const tr = stage
+        ? stage.findOne(node => node.getClassName && node.getClassName() === 'Transformer')
+        : null;
 
-      // ← ESQUINAS: fontSize proporcional
-      if (anchor.includes('left') || anchor.includes('right')) {
-        const scale = Math.max(shape.scaleX(), shape.scaleY());
-        shape.fontSize((shape._meta.fontSize || 24) * scale);
+      const anchor = tr && tr.getActiveAnchor ? tr.getActiveAnchor() : '';
+
+      // Escala aplicada por el transformer
+      const sx = shape.scaleX() || 1;
+      const sy = shape.scaleY() || 1;
+
+      // Bases seguras (para evitar NaN)
+      const baseWidth = Number.isFinite(Number(shape._meta.width))
+        ? Number(shape._meta.width)
+        : shape.width();
+
+      const baseHeight = Number.isFinite(Number(shape._meta.height))
+        ? Number(shape._meta.height)
+        : (shape.height() || shape.getClientRect().height);
+
+      // ESQUINAS: escalar width + height de la caja
+      if (
+        anchor === 'top-left' ||
+        anchor === 'top-right' ||
+        anchor === 'bottom-left' ||
+        anchor === 'bottom-right'
+      ) {
+        const newWidth = baseWidth * sx;
+        const newHeight = baseHeight * sy;
+
+        shape.width(newWidth);
+        shape.height(newHeight);
+
+        shape._meta.width = newWidth;
+        shape._meta.height = newHeight;
+
+        // reset escala para no acumular
         shape.scale({ x: 1, y: 1 });
       }
-      // ← LADOS: stretch width (scaleX)
-      else if (anchor === 'top-center' || anchor === 'bottom-center' || anchor === 'middle-left' || anchor === 'middle-right') {
-        shape.width(shape.width() * shape.scaleX());
-        shape.scaleX(1);
+
+      // LADOS HORIZONTALES: cambiar solo ancho (esto ya te funcionaba bien)
+      else if (anchor === 'middle-left' || anchor === 'middle-right') {
+        const newWidth = baseWidth * sx;
+        shape.width(newWidth);
+        shape._meta.width = newWidth;
+        shape.scaleX(1); // reset escala X
+      }
+
+      // LADOS VERTICALES (arriba / abajo): cambiar solo alto de la caja
+      else if (anchor === 'top-center' || anchor === 'bottom-center') {
+        const newHeight = baseHeight * sy;
+        shape.height(newHeight);
+        shape._meta.height = newHeight;
+        shape.scaleY(1); // reset escala Y
+      }
+
+      // Si no hay anchor claro, no tocamos nada y reseteamos escala
+      else {
+        shape.scale({ x: 1, y: 1 });
       }
     });
 
 
 
+
+
+    // 7) Persistir cambios al terminar drag/transform
     shape.on('dragend transformend', () => {
-      const m = shape._meta;
+      // Normalizar meta: usar meta si hace falta
+      let m = shape.meta || shape._meta;
       if (!m) return;
+      shape.meta = m;
+      shape._meta = m;
+
+      // Posición y rotación SIEMPRE se guardan
+      let x = shape.x();
+      let y = shape.y();
+      let rot = typeof shape.rotation === 'function' ? shape.rotation() : 0;
+
+      // Redondear a 1 decimal para evitar 554.4844137460018 etc.
+      x = Math.round(x * 10) / 10;
+      y = Math.round(y * 10) / 10;
+      rot = Math.round(rot * 10) / 10;
+
+      m.x = x;
+      m.y = y;
+      m.rotation = rot;
+
+      shape.x(x);
+      shape.y(y);
+      if (typeof shape.rotation === 'function') {
+        shape.rotation(rot);
+      }
 
       if (m.type === 'text') {
-        m.fontSize = shape.fontSize(); // actualiza desde transform
-        m.width = shape.width();       // guarda stretch
-      }
-      else {
-        // Imágenes/rects: tamaño final
-        const w = shape.width() * shape.scaleX();
-        const h = shape.height() * shape.scaleY();
-        shape.width(w);
-        shape.height(h);
-        shape.scale({ x: 1, y: 1 });
-        m.width = w;
-        m.height = h;
-        m.scale = 1;
+        // TEXTO: fontSize y tamaño de la caja, pero redondeado
+        if (typeof shape.fontSize === 'function') {
+          m.fontSize = shape.fontSize();
+        }
+
+        let w = 0;
+        let h = 0;
+
+        if (typeof shape.width === 'function') {
+          w = shape.width();
+        }
+        if (typeof shape.height === 'function') {
+          h = shape.height();
+        }
+
+        // Redondear tamaño a 1 decimal para que Tamaño no tenga mil dígitos
+        const rw = Math.round(w * 10) / 10;
+        const rh = Math.round(h * 10) / 10;
+
+        if (typeof shape.width === 'function') shape.width(rw);
+        if (typeof shape.height === 'function') shape.height(rh);
+
+        m.width = rw;
+        m.height = rh;
+      } else {
+        // IMÁGENES / RECTS: consolidar escala en width/height
+        const w = typeof shape.width === 'function'
+          ? shape.width() * (shape.scaleX && shape.scaleX() || 1)
+          : 0;
+        const h = typeof shape.height === 'function'
+          ? shape.height() * (shape.scaleY && shape.scaleY() || 1)
+          : 0;
+
+        const rw = Math.round(w * 10) / 10;
+        const rh = Math.round(h * 10) / 10;
+
+        if (typeof shape.width === 'function') shape.width(rw);
+        if (typeof shape.height === 'function') shape.height(rh);
+        if (typeof shape.scaleX === 'function') shape.scaleX(1);
+        if (typeof shape.scaleY === 'function') shape.scaleY(1);
+
+        m.width = rw;
+        m.height = rh;
       }
 
-      m.x = shape.x();
-      m.y = shape.y();
-      m.rotation = shape.rotation();
+
+      // Estado base para animaciones
+      shape._baseAnimState = {
+        x: x,
+        y: y,
+        scaleX: shape.scaleX ? shape.scaleX() : 1,
+        scaleY: shape.scaleY ? shape.scaleY() : 1,
+        opacity: shape.opacity ? shape.opacity() : 1,
+      };
 
       OverlayEditor.updatePropertiesPanel(shape);
-      OverlayEditor.layer.batchDraw();
+      if (OverlayEditor.layer) {
+        OverlayEditor.layer.batchDraw();
+      }
       OverlayEditor.pushHistory && OverlayEditor.pushHistory();
     });
 
 
   },
+
 
 
   // --------- Panel de propiedades grupo o capa ---------
@@ -1460,9 +1691,15 @@ renderOverlayList() {
     const inputName = document.getElementById('propName');
     const inputX = document.getElementById('propX');
     const inputY = document.getElementById('propY');
+    const inputRotation = document.getElementById('propRotation');
+    const inputWidth = document.getElementById('propWidth');
+    const inputHeight = document.getElementById('propHeight');
     const inputOpacity = document.getElementById('propOpacity');
+
+    const bgRow = document.getElementById('propBgRow');
     const inputBg = document.getElementById('propBgColor');
     const inputBgAlpha = document.getElementById('propBgAlpha');
+
     const inputBorderColor = document.getElementById('propBorderColor');
     const inputBorderAlpha = document.getElementById('propBorderAlpha');
     const inputBorderWidth = document.getElementById('propBorderWidth');
@@ -1471,6 +1708,7 @@ renderOverlayList() {
     const inputTextColor = document.getElementById('propTextColor');
     const inputTextAlpha = document.getElementById('propTextAlpha');
     const inputTextContent = document.getElementById('propTextContent');
+    const inputTextAlign = document.getElementById('propTextAlign');
     const inputAnim = document.getElementById('propAnimation');
     const inputAnimDur = document.getElementById('propAnimDuration');
     const inputTrigger = document.getElementById('propTrigger');
@@ -1479,6 +1717,10 @@ renderOverlayList() {
     if (inputName) inputName.onchange = e => this.onPropChange('name', e.target.value);
     if (inputX) inputX.onchange = e => this.onPropChange('x', e.target.value);
     if (inputY) inputY.onchange = e => this.onPropChange('y', e.target.value);
+    if (inputRotation) inputRotation.onchange = e => this.onPropChange('rotation', e.target.value);
+    if (inputWidth) inputWidth.onchange = e => this.onPropChange('width', e.target.value);
+    if (inputHeight) inputHeight.onchange = e => this.onPropChange('height', e.target.value);
+
     if (inputOpacity) inputOpacity.oninput = e => this.onPropChange('opacity', e.target.value);
     if (inputBg) inputBg.oninput = e => this.onPropChange('bgColor', e.target.value);
     if (inputBgAlpha) inputBgAlpha.oninput = e => this.onPropChange('bgAlpha', e.target.value);
@@ -1490,6 +1732,8 @@ renderOverlayList() {
     if (inputTextColor) inputTextColor.oninput = e => this.onPropChange('textColor', e.target.value);
     if (inputTextAlpha) inputTextAlpha.oninput = e => this.onPropChange('textAlpha', e.target.value);
     if (inputTextContent) inputTextContent.oninput = e => this.onPropChange('text', e.target.value);
+    if (inputTextAlign) inputTextAlign.onchange = e => this.onPropChange('textAlign', e.target.value);
+
     if (inputAnim) inputAnim.onchange = e => this.onPropChange('animation', e.target.value);
     if (inputAnimDur) inputAnimDur.onchange = e => this.onPropChange('animDuration', e.target.value);
 
@@ -1502,19 +1746,47 @@ renderOverlayList() {
     if (inputName) inputName.value = m.name || (m.type === 'text' ? (m.text || '') : '');
     if (inputX) inputX.value = typeof m.x === 'number' ? m.x : Math.round(shape.x());
     if (inputY) inputY.value = typeof m.y === 'number' ? m.y : Math.round(shape.y());
+    if (inputRotation) inputRotation.value = typeof m.rotation === 'number' ? m.rotation : Math.round(shape.rotation() || 0);
     if (inputOpacity) inputOpacity.value = m.opacity ?? 100;
 
-        // Valores iniciales de Fondo/Borde para cualquier tipo de elemento
-        const baseColor  = m.baseBgColor    || m.backgroundColor || '#000000';
-        const alpha      = typeof m.bgAlpha === 'number' ? m.bgAlpha : 100;
-        const borderBase = m.baseBorderColor || m.borderColor    || '#06b6d4';
-        const bAlpha     = typeof m.borderAlpha === 'number' ? m.borderAlpha : 100;
+    // Tamaño inicial: usa meta si existe; si no, lee del shape
+    if (inputWidth) {
+      const w = typeof m.width === 'number'
+        ? m.width
+        : (typeof shape.width === 'function' ? Math.round(shape.width()) : 0);
+      inputWidth.value = w;
+    }
 
-        if (inputBg)          inputBg.value          = baseColor;
-        if (inputBgAlpha)     inputBgAlpha.value     = alpha;
-        if (inputBorderColor) inputBorderColor.value = borderBase;
-        if (inputBorderAlpha) inputBorderAlpha.value = bAlpha;
-        if (inputBorderWidth) inputBorderWidth.value = m.borderWidth ?? 0;
+    if (inputHeight) {
+      const h = typeof m.height === 'number'
+        ? m.height
+        : (typeof shape.height === 'function' ? Math.round(shape.height()) : 0);
+      inputHeight.value = h;
+    }
+
+
+    // Valores iniciales de Fondo/Borde para cualquier tipo de elemento
+    const isRect =
+      m.type === 'rect' ||
+      (typeof shape.getClassName === 'function' && shape.getClassName() === 'Rect');
+
+    // Mostrar/ocultar la fila de "Fondo" según el tipo
+    if (bgRow) {
+      bgRow.style.display = isRect ? 'flex' : 'none';
+    }
+
+    // Valores iniciales de Fondo/Borde
+    const baseColor = m.baseBgColor || m.backgroundColor || '#000000';
+    const alpha = (typeof m.bgAlpha === 'number') ? m.bgAlpha : 100;
+    const borderBase = m.baseBorderColor || m.borderColor || '#000000';
+    const bAlpha = (typeof m.borderAlpha === 'number') ? m.borderAlpha : 100;
+
+    if (inputBg) inputBg.value = baseColor;
+    if (inputBgAlpha) inputBgAlpha.value = alpha;
+    if (inputBorderColor) inputBorderColor.value = borderBase;
+    if (inputBorderAlpha) inputBorderAlpha.value = bAlpha;
+    if (inputBorderWidth) inputBorderWidth.value = m.borderWidth ?? 0;
+
 
     if (m.type === 'text') {
       if (textSection) textSection.style.display = 'block';
@@ -1522,13 +1794,17 @@ renderOverlayList() {
       if (inputFontFamily) inputFontFamily.value = m.fontFamily || 'Inter';
       if (inputFontSize) inputFontSize.value = m.fontSize || 32;
 
-      const textBase = m.baseTextColor || m.color || '#ffffff';
+      const textBase = m.baseTextColor || '#ffffff';
       const tAlpha = typeof m.textAlpha === 'number' ? m.textAlpha : 100;
 
       if (inputTextColor) inputTextColor.value = textBase;
       if (inputTextAlpha) inputTextAlpha.value = tAlpha;
       if (inputTextContent) inputTextContent.value = m.text || '';
+
+      const align = m.align || 'left';
+      if (inputTextAlign) inputTextAlign.value = align;
     }
+
 
     if (inputAnim) inputAnim.value = m.animationBase || '';
     if (inputAnimDur) inputAnimDur.value = m.animationDurationSec || 3;
@@ -1553,6 +1829,33 @@ renderOverlayList() {
     const { r, g, b } = this.hexToRgb(hex);
     const a = Math.max(0, Math.min(1, alpha01));
     return `rgba(${r}, ${g}, ${b}, ${a})`;
+  },
+
+  // Aplica borde (color + grosor) a cualquier shape según su meta
+  applyBorderToShape(shape, meta) {
+    if (!shape || !meta) return;
+
+    const m = meta;
+
+    // Color final del borde:
+    // - Si ya hay m.borderColor (rgba) lo usamos tal cual.
+    // - Si no, lo calculamos desde baseBorderColor + borderAlpha.
+    let rgba = m.borderColor;
+    if (!rgba) {
+      const base = m.baseBorderColor || '#06b6d4';
+      const alpha = (typeof m.borderAlpha === 'number' ? m.borderAlpha : 100);
+      rgba = this.makeRgba(base, alpha / 100);
+      m.borderColor = rgba;
+    }
+
+    const width = m.borderWidth ?? 0;
+
+    if (typeof shape.stroke === 'function') {
+      shape.stroke(rgba);
+    }
+    if (typeof shape.strokeWidth === 'function') {
+      shape.strokeWidth(width);
+    }
   },
 
 
@@ -1597,9 +1900,23 @@ renderOverlayList() {
     const period = duration * 1000;
     const twoPi = Math.PI * 2;
     const layer = this.layer;
+    const editor = this; // para acceder al transformer dentro del callback
 
     const anim = new Konva.Animation(frame => {
       if (!frame) return;
+
+      // Si este shape está seleccionado, lo dejamos quieto en su estado base
+      const selectedNodes = editor.transformer?.nodes?.() || [];
+      const isSelected = selectedNodes.includes(shape);
+
+      if (isSelected) {
+        shape.position({ x: base.x, y: base.y });
+        shape.scaleX(base.scaleX);
+        shape.scaleY(base.scaleY);
+        shape.opacity(base.opacity);
+        return;
+      }
+
       const t = frame.time % period;
       const p = t / period; // 0..1
 
@@ -1607,28 +1924,35 @@ renderOverlayList() {
         case 'breathe': {
           const amp = 0.05; // 5% de “respiración”
           const s = 1 + amp * Math.sin(p * twoPi);
-          shape.scaleX(base.scaleX * s);
-          shape.scaleY(base.scaleY * s);
+          const sx = base.scaleX * s;
+          const sy = base.scaleY * s;
+
+          // Redondeo suave a 3 decimales
+          shape.scaleX(Math.round(sx * 1000) / 1000);
+          shape.scaleY(Math.round(sy * 1000) / 1000);
           break;
         }
 
         case 'float': {
           const amp = 15; // px arriba/abajo
           const dy = amp * Math.sin(p * twoPi);
-          shape.y(base.y + dy);
+          const ny = base.y + dy;
+          shape.y(Math.round(ny * 10) / 10); // 1 decimal
           break;
         }
 
         case 'shake': {
           const amp = 6; // px a los lados
           const dx = amp * Math.sin(p * twoPi * 4); // más rápido
-          shape.x(base.x + dx);
+          const nx = base.x + dx;
+          shape.x(Math.round(nx * 10) / 10); // 1 decimal
           break;
         }
 
         case 'flash': {
           const v = 0.5 + 0.5 * Math.sin(p * twoPi * 2); // 0..1
-          shape.opacity(base.opacity * v);
+          const op = base.opacity * v;
+          shape.opacity(Math.round(op * 1000) / 1000); // 3 decimales
           break;
         }
 
@@ -1658,6 +1982,7 @@ renderOverlayList() {
 
       // Soportar rect antiguos sin type usando la clase de Konva
       const isRect = m.type === 'rect' || shape.getClassName?.() === 'Rect';
+      const isText = m.type === 'text';
 
       switch (prop) {
         case 'name':
@@ -1683,6 +2008,41 @@ renderOverlayList() {
           break;
         }
 
+        case 'rotation': {
+          const v = parseFloat(value || '0') || 0;
+          m.rotation = v;
+          if (typeof shape.rotation === 'function') {
+            shape.rotation(v);
+          }
+          break;
+        }
+
+
+
+
+        case 'width': {
+          const v = Math.max(1, parseInt(value || '1', 10) || 1);
+          m.width = v;
+          if (typeof shape.width === 'function') {
+            shape.width(v);
+          }
+          break;
+        }
+
+        case 'height': {
+          const v = Math.max(1, parseInt(value || '1', 10) || 1);
+          m.height = v;
+          if (typeof shape.height === 'function') {
+            shape.height(v);
+          }
+          break;
+        }
+
+
+
+
+        // -------- FONDO (color + alpha) --------
+
         case 'opacity': {
           const v = Math.max(0, Math.min(100, parseInt(value || '0', 10)));
           m.opacity = v;
@@ -1690,99 +2050,103 @@ renderOverlayList() {
           break;
         }
 
-// -------- FONDO (color + alpha) --------
-case 'bgColor': {
-  // Guardar siempre en meta, sea imagen, texto o rect
-  m.baseBgColor = value || '#000000';
-  const alpha = typeof m.bgAlpha === 'number' ? m.bgAlpha : 100;
-  const rgba = this.makeRgba(m.baseBgColor, alpha / 100);
-  m.backgroundColor = rgba;
+        case 'bgColor': {
+          // Guardar siempre en meta, sea imagen, texto o rect
+          m.baseBgColor = value || '#000000';
+          const alpha = typeof m.bgAlpha === 'number' ? m.bgAlpha : 100;
+          const rgba = this.makeRgba(m.baseBgColor, alpha / 100);
+          m.backgroundColor = rgba;
 
-  // Solo los rectángulos usan fill como “fondo”
-  if (m.type === 'rect' || shape.getClassName?.() === 'Rect') {
-    shape.fill(rgba);
-  }
-  break;
-}
-
-case 'bgAlpha': {
-  const v = Math.max(0, Math.min(100, parseInt(value || '100', 10)));
-  m.bgAlpha = v;
-  const base = m.baseBgColor || '#000000';
-  const rgba = this.makeRgba(base, v / 100);
-  m.backgroundColor = rgba;
-
-  if (m.type === 'rect' || shape.getClassName?.() === 'Rect') {
-    shape.fill(rgba);
-  }
-  break;
-}
-
-// -------- BORDE (color + alpha + grosor) --------
-case 'borderColor': {
-  m.baseBorderColor = value || '#06b6d4';
-  const alpha = typeof m.borderAlpha === 'number' ? m.borderAlpha : 100;
-  const rgba = this.makeRgba(m.baseBorderColor, alpha / 100);
-  m.borderColor = rgba;
-
-  // Konva.Text y Konva.Image también soportan stroke
-  if (shape.stroke) {
-    shape.stroke(rgba);
-  }
-  break;
-}
-
-case 'borderAlpha': {
-  const v = Math.max(0, Math.min(100, parseInt(value || '100', 10)));
-  m.borderAlpha = v;
-  const base = m.baseBorderColor || '#06b6d4';
-  const rgba = this.makeRgba(base, v / 100);
-  m.borderColor = rgba;
-
-  if (shape.stroke) {
-    shape.stroke(rgba);
-  }
-  break;
-}
-
-case 'borderWidth': {
-  const v = Math.max(0, parseInt(value || '0', 10));
-  m.borderWidth = v;
-
-  if (shape.strokeWidth) {
-    shape.strokeWidth(v);
-  }
-  break;
-}
-
-
-
-        // -------- TEXTO --------
-        case 'text':
-          if (m.type === 'text') {
-            m.text = value;
-            shape.text(value);
-          }
-          break;
-
-        case 'fontFamily':
-          if (m.type === 'text') {
-            m.fontFamily = value;
-            shape.fontFamily(value);
-          }
-          break;
-
-        case 'fontSize': {
-          if (m.type === 'text') {
-            const v = Math.max(8, parseInt(value || '8', 10));
-            m.fontSize = v;
-            shape.fontSize(v);
+          // Solo los rectángulos usan fill como “fondo”
+          if (m.type === 'rect' || shape.getClassName?.() === 'Rect') {
+            shape.fill(rgba);
           }
           break;
         }
 
-        case 'textColor':
-          if (m.type === 'text') {
+        case 'bgAlpha': {
+          const v = Math.max(0, Math.min(100, parseInt(value || '100', 10)));
+          m.bgAlpha = v;
+          const base = m.baseBgColor || '#000000';
+          const rgba = this.makeRgba(base, v / 100);
+          m.backgroundColor = rgba;
+
+          if (m.type === 'rect' || shape.getClassName?.() === 'Rect') {
+            shape.fill(rgba);
+          }
+          break;
+        }
+
+        // -------- BORDE (color + alpha + grosor) --------
+        case 'borderColor': {
+          m.baseBorderColor = value || '#06b6d4';
+          const alpha = typeof m.borderAlpha === 'number' ? m.borderAlpha : 100;
+          const rgba = this.makeRgba(m.baseBorderColor, alpha / 100);
+          m.borderColor = rgba;
+
+          // Konva.Text y Konva.Image también soportan stroke
+          if (shape.stroke) {
+            shape.stroke(rgba);
+          }
+          break;
+        }
+
+        case 'borderAlpha': {
+          const v = Math.max(0, Math.min(100, parseInt(value || '100', 10)));
+          m.borderAlpha = v;
+          const base = m.baseBorderColor || '#06b6d4';
+          const rgba = this.makeRgba(base, v / 100);
+          m.borderColor = rgba;
+
+          if (shape.stroke) {
+            shape.stroke(rgba);
+          }
+          break;
+        }
+
+        case 'borderWidth': {
+          const v = Math.max(0, parseInt(value || '0', 10));
+          m.borderWidth = v;
+
+          if (shape.strokeWidth) {
+            shape.strokeWidth(v);
+          }
+          break;
+        }
+
+
+
+        // -------- TEXTO --------
+        // -------- TEXTO --------
+        case 'text': {
+          if (isText) {
+            m.text = value;
+            shape.text(value);
+          }
+          break;
+        }
+
+        case 'fontFamily': {
+          if (isText) {
+            m.fontFamily = value;
+            shape.fontFamily(value);
+          }
+          break;
+        }
+
+        case 'fontSize': {
+          if (isText) {
+            const v = Math.max(8, parseInt(value || '8', 10) || 8);
+            m.fontSize = v;
+            shape.fontSize(v);
+            // Opcional: actualizar altura aprox de la caja
+            m.height = shape.height();
+          }
+          break;
+        }
+
+        case 'textColor': {
+          if (isText) {
             m.baseTextColor = value || '#ffffff';
             const tAlpha = typeof m.textAlpha === 'number' ? m.textAlpha : 100;
             const rgba = this.makeRgba(m.baseTextColor, tAlpha / 100);
@@ -1790,10 +2154,11 @@ case 'borderWidth': {
             shape.fill(rgba);
           }
           break;
+        }
 
-        case 'textAlpha':
-          if (m.type === 'text') {
-            const v = Math.max(0, Math.min(100, parseInt(value || '100', 10)));
+        case 'textAlpha': {
+          if (isText) {
+            const v = Math.max(0, Math.min(100, parseInt(value || '100', 10) || 100));
             m.textAlpha = v;
             const base = m.baseTextColor || '#ffffff';
             const rgba = this.makeRgba(base, v / 100);
@@ -1801,6 +2166,19 @@ case 'borderWidth': {
             shape.fill(rgba);
           }
           break;
+        }
+
+        case 'textAlign': {
+          if (isText) {
+            const align = value || 'left';
+            m.align = align;
+            if (typeof shape.align === 'function') {
+              shape.align(align);
+            }
+          }
+          break;
+        }
+
 
         // -------- ANIMACIÓN --------
         case 'animation':
@@ -1828,53 +2206,119 @@ case 'borderWidth': {
     this.pushHistory?.();
   },
 
+  nudgeSelection(dx, dy) {
+    const nodes = this.transformer?.nodes?.() || [];
+    if (!nodes.length || !this.currentOverlay) return;
 
+    const logicalW = this.currentOverlay.canvas?.width || 1080;
+    const logicalH = this.currentOverlay.canvas?.height || 1920;
 
+    nodes.forEach(shape => {
+      let m = shape.meta || shape._meta;
+      if (!m) return;
+      shape.meta = m;
+      shape._meta = m;
 
+      // Coordenadas actuales (preferimos meta si existe)
+      const oldX = (typeof m.x === 'number') ? m.x : shape.x();
+      const oldY = (typeof m.y === 'number') ? m.y : shape.y();
 
+      let newX = oldX + dx;
+      let newY = oldY + dy;
+
+      // Tamaño para clamps básicos dentro del canvas
+      const w = typeof m.width === 'number'
+        ? m.width
+        : (typeof shape.width === 'function' ? shape.width() : 0);
+      const h = typeof m.height === 'number'
+        ? m.height
+        : (typeof shape.height === 'function' ? shape.height() : 0);
+
+      const maxX = w ? (logicalW - w) : logicalW;
+      const maxY = h ? (logicalH - h) : logicalH;
+
+      if (newX < 0) newX = 0;
+      if (newY < 0) newY = 0;
+      if (newX > maxX) newX = maxX;
+      if (newY > maxY) newY = maxY;
+
+      // Redondear a 1 decimal para mantener números limpios
+      newX = Math.round(newX * 10) / 10;
+      newY = Math.round(newY * 10) / 10;
+
+      // Guardar en meta y shape
+      m.x = newX;
+      m.y = newY;
+      shape.x(newX);
+      shape.y(newY);
+
+      // Si tiene estado base de animación, actualizarlo también
+      if (!shape._baseAnimState) {
+        shape._baseAnimState = {
+          x: newX,
+          y: newY,
+          scaleX: shape.scaleX ? shape.scaleX() : 1,
+          scaleY: shape.scaleY ? shape.scaleY() : 1,
+          opacity: shape.opacity ? shape.opacity() : 1,
+        };
+      } else {
+        shape._baseAnimState.x = newX;
+        shape._baseAnimState.y = newY;
+      }
+    });
+
+    // Si solo hay uno, refrescamos el panel con sus coords nuevas
+    if (nodes.length === 1) {
+      this.updatePropertiesPanel(nodes[0]);
+    } else if (this.layer) {
+      this.layer.batchDraw();
+    }
+
+    this.pushHistory?.();
+  },
 
   // --------- Guardar overlay ---------
-async saveCurrent() {
-  if (!this.currentOverlay || !this.stage) return;
+  async saveCurrent() {
+    if (!this.currentOverlay || !this.stage) return;
 
-  // Asegura que tenga id
-  if (!this.currentOverlay.id) {
-    this.currentOverlay.id = crypto.randomUUID();
-  }
+    // Asegura que tenga id
+    if (!this.currentOverlay.id) {
+      this.currentOverlay.id = crypto.randomUUID();
+    }
 
-  // Canvas info
-  this.currentOverlay.canvas = {
-    width: this.stage.width(),
-    height: this.stage.height(),
-    background: 'transparent',
-  };
+    // Canvas info
+    this.currentOverlay.canvas = {
+      width: this.stage.width(),
+      height: this.stage.height(),
+      background: 'transparent',
+    };
 
-  // Preview pequeña
-  try {
-    const preview = this.stage.toDataURL({ pixelRatio: 0.2 });
-    this.currentOverlay.preview = preview;
-  } catch (e) {
-    console.error('No se pudo generar preview', e);
-  }
+    // Preview pequeña
+    try {
+      const preview = this.stage.toDataURL({ pixelRatio: 0.2 });
+      this.currentOverlay.preview = preview;
+    } catch (e) {
+      console.error('No se pudo generar preview', e);
+    }
 
-  const res = await fetch('/api/overlays', {
-    method: 'POST',                         // SIEMPRE POST
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(this.currentOverlay),
-  });
+    const res = await fetch('/api/overlays', {
+      method: 'POST',                         // SIEMPRE POST
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(this.currentOverlay),
+    });
 
-  if (!res.ok) {
-    console.error('Error guardando overlay', await res.text());
-    alert('Error guardando overlay');
-    return;
-  }
+    if (!res.ok) {
+      console.error('Error guardando overlay', await res.text());
+      alert('Error guardando overlay');
+      return;
+    }
 
-  const data = await res.json();
-  this.currentOverlay = data.overlay;       // por si el server normaliza algo
+    const data = await res.json();
+    this.currentOverlay = data.overlay;       // por si el server normaliza algo
 
-  alert('Overlay guardado');
-  this.loadOverlays();
-},
+    alert('Overlay guardado');
+    this.loadOverlays();
+  },
 
 
   snapshotState() {
@@ -2010,8 +2454,74 @@ async saveCurrent() {
       btnText.onclick = () => this.addTextElement();
     }
 
-      const btnRect = document.querySelector('button[data-tool="rect"]');
-  if (btnRect) btnRect.onclick = this.addRectElement.bind(this);
+        // Botón para añadir imagen externa (archivo o URL)
+    const btnExternalImg = document.getElementById('btnAddExternalImage');
+    const externalFileInput = document.getElementById('externalImageFileInput');
+
+    if (btnExternalImg && externalFileInput) {
+      // Click en el botón "Img"
+      btnExternalImg.onclick = async () => {
+        if (!this.currentOverlay) {
+          alert('Primero crea o abre un overlay.');
+          return;
+        }
+
+        // Preguntar si quiere archivo local (Aceptar) o URL (Cancelar)
+        const useFile = confirm(
+          '¿Quieres subir un archivo de tu PC?\n' +
+          'Aceptar = archivo local\n' +
+          'Cancelar = URL externa'
+        );
+
+        if (useFile) {
+          // Disparar el input de archivo oculto
+          externalFileInput.value = '';
+          externalFileInput.click();
+          return;
+        }
+
+        // Modo URL externa
+        const url = prompt('Pega la URL de la imagen externa:');
+        if (!url) return;
+
+        try {
+          // Igual que con los renders/gifts: cachear en el servidor
+          const res = await fetch('/api/cache-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+          });
+          const data = await res.json();
+          const finalUrl = data.success ? data.cachedUrl : url;
+
+          this.addImageElement(finalUrl, 'Imagen externa', 'image');
+        } catch (e) {
+          console.error('Error cacheando imagen externa', e);
+          // Fallback: usar directamente la URL
+          this.addImageElement(url, 'Imagen externa', 'image');
+        }
+      };
+
+      // Cuando el usuario elige un archivo local
+      externalFileInput.onchange = () => {
+        const file = externalFileInput.files && externalFileInput.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result; // base64
+          const name = file.name || 'Imagen subida';
+
+          // Lo tratamos como un elemento de tipo 'image' normal
+          this.addImageElement(dataUrl, name, 'image');
+        };
+        reader.readAsDataURL(file);
+      };
+    }
+
+
+    const btnRect = document.querySelector('button[data-tool="rect"]');
+    if (btnRect) btnRect.onclick = this.addRectElement.bind(this);
 
 
 
@@ -2095,60 +2605,98 @@ async saveCurrent() {
     }
 
 
-    // Tecla Supr para eliminar selección
+    // Teclas globales: Delete, Ctrl+Z/Y/C/X/V, duplicar, agrupar, flechas
     document.addEventListener('keydown', e => {
       const tag = (e.target.tagName || '').toLowerCase();
+      // No interferir cuando estás escribiendo en inputs o textareas
       if (tag === 'input' || tag === 'textarea') return;
 
-      if (e.key === 'Delete') {
-        this.deleteSelected();
+      // Mover selección con flechas
+      // Mover selección con flechas
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' ||
+        e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+
+        const nodes = this.transformer?.nodes?.() || [];
+        if (!nodes.length) return;
+
+        // Evitar scroll de la página, etc.
+        e.preventDefault();
+
+        let baseStep;
+
+        if (e.altKey) {
+          // Alt + flecha → ultra preciso
+          baseStep = 0.1;
+        } else if (e.shiftKey) {
+          // Shift + flecha → salto grande
+          baseStep = 10;
+        } else {
+          // Flecha sola → normal
+          baseStep = 1;
+        }
+
+        // Si la tecla está repitiéndose (la dejas apretada),
+        // hacemos el paso un poco más grande para que recorra más rápido.
+        // Por ejemplo x3 el paso base.
+        const step = e.repeat ? baseStep * 3 : baseStep;
+
+        let dx = 0;
+        let dy = 0;
+
+        if (e.key === 'ArrowLeft') dx = -step;
+        if (e.key === 'ArrowRight') dx = step;
+        if (e.key === 'ArrowUp') dy = -step;
+        if (e.key === 'ArrowDown') dy = step;
+
+        this.nudgeSelection(dx, dy);
+        return;
       }
-    });
 
-    // Teclas globales (Delete, Ctrl+Z/Y/C/X/V)
-    document.addEventListener('keydown', e => {
-      const tag = (e.target.tagName || '').toLowerCase();
-      if (tag === 'input' || tag === 'textarea') return;
 
-      // Undo / Redo
+      // Undo / Redo, duplicar, agrupar, copiar/cortar/pegar
       if (e.ctrlKey || e.metaKey) {
-        if (e.key === 'z') {
+        const k = e.key.toLowerCase();
+
+        if (k === 'z') {
           e.preventDefault();
           this.undo();
           return;
         }
-        if (e.key === 'y') {
+
+        if (k === 'y') {
           e.preventDefault();
           this.redo();
           return;
         }
 
-        // NUEVO: duplicar selección (Ctrl+D)
-        if (e.key.toLowerCase() === 'd') {
+        // Duplicar selección Ctrl+D
+        if (k === 'd') {
           e.preventDefault();
           this.duplicateSelected();
           return;
         }
 
-        if (e.key.toLowerCase() === 'g') {
+        // Agrupar selección Ctrl+G
+        if (k === 'g') {
           e.preventDefault();
           this.groupSelected();
           return;
         }
 
-
         // Copiar / Cortar / Pegar
-        if (e.key === 'c') {
+        if (k === 'c') {
           e.preventDefault();
           this.copySelected();
           return;
         }
-        if (e.key === 'x') {
+
+        if (k === 'x') {
           e.preventDefault();
           this.cutSelected();
           return;
         }
-        if (e.key === 'v') {
+
+        if (k === 'v') {
           e.preventDefault();
           this.pasteClipboard();
           return;
@@ -2162,6 +2710,14 @@ async saveCurrent() {
     });
 
 
+
+
+
+
+
+
+
+    
 
 
     // Inputs de propiedades (deja tus bindings como estaban)
@@ -2219,7 +2775,13 @@ async saveCurrent() {
         opacity: (cloned.opacity ?? 100) / 100,
         rotation: cloned.rotation || 0
       });
+
+      text.meta = cloned;
       text._meta = cloned;
+
+      // APLICAR BORDE si venía guardado en el meta copiado
+      this.applyBorderToShape(text, cloned);
+
       this.makeDraggable(text);
       this.layer.add(text);
     } else if (cloned.src) {
@@ -2277,75 +2839,87 @@ async saveCurrent() {
       opacity: el.opacity / 100,
       rotation: el.rotation
     });
+
+    text.meta = el;
     text._meta = el;
+
+    // Si en algún momento el texto ya tenía borde en meta (por duplicar, etc.),
+    // lo aplicamos aquí también.
+    this.applyBorderToShape(text, el);
+
     this.makeDraggable(text);
     this.layer.add(text);
 
     this.selectedElementId = el.id;
-    this.transformer.nodes([text]);
+    if (this.transformer) {
+      this.transformer.nodes([text]);
+    }
     this.updatePropertiesPanel(text);
     this.renderLayersTree();
     this.layer.draw();
     this.pushHistory && this.pushHistory();
   },
 
-addRectElement() {
-  if (!this.currentOverlay || !this.layer) return;
 
-  // 1) Crear meta en el JSON
-  const el = {
-    id: crypto.randomUUID(),
-    type: 'rect',
-    name: 'Rectángulo',
-    x: 200,
-    y: 200,
-    width: 300,
-    height: 150,
-    // Fondo transparente por defecto
-    baseBgColor: '#000000',
-    bgAlpha: 0,
-    backgroundColor: 'rgba(0,0,0,0)',
-    // Borde cian por defecto
-    baseBorderColor: '#06b6d4',
-    borderAlpha: 100,
-    borderColor: 'rgba(6,182,212,1)',
-    borderWidth: 4,
-    opacity: 100,
-    rotation: 0,
-    zIndex: this.currentOverlay.elements.length + 1,
-  };
+  addRectElement() {
+    if (!this.currentOverlay || !this.layer) return;
 
-  this.currentOverlay.elements.push(el);
+    // 1) Crear meta en el JSON
+    const el = {
+      id: crypto.randomUUID(),
+      type: 'rect',
+      name: 'Rectángulo',
+      x: 200,
+      y: 200,
+      width: 300,
+      height: 150,
 
-  // 2) Crear el Konva.Rect correspondiente
-  const rect = new Konva.Rect({
-    x: el.x,
-    y: el.y,
-    width: el.width,
-    height: el.height,
-    fill: el.backgroundColor,
-    stroke: el.borderColor,
-    strokeWidth: el.borderWidth,
-    opacity: (el.opacity ?? 100) / 100,
-    rotation: el.rotation || 0,
-  });
+      // Fondo transparente por defecto
+      baseBgColor: '#000000',
+      bgAlpha: 0,
+      backgroundColor: 'rgba(0,0,0,0)',
 
-  rect.meta = el;
+      // Borde cian por defecto
+      baseBorderColor: '#000000',
+      borderAlpha: 100,
+      borderColor: 'rgb(0, 0, 0)',
+      borderWidth: 1,
+      opacity: 100,
+      rotation: 0,
+      zIndex: this.currentOverlay.elements.length + 1,
+    };
 
-  this.makeDraggable(rect);
-  this.layer.add(rect);
+    this.currentOverlay.elements.push(el);
 
-  // 3) Seleccionarlo y abrir sus props
-  this.selectedElementId = el.id;
-  if (this.transformer) {
-    this.transformer.nodes([rect]);
-  }
+    // 2) Crear el Konva.Rect correspondiente
+    const rect = new Konva.Rect({
+      x: el.x,
+      y: el.y,
+      width: el.width,
+      height: el.height,
+      fill: el.backgroundColor,
+      stroke: el.borderColor,
+      strokeWidth: el.borderWidth,
+      opacity: (el.opacity ?? 100) / 100,
+      rotation: el.rotation || 0,
+    });
 
-  this.updatePropertiesPanel(rect);
-  this.renderLayersTree();
-  this.layer.draw();
-  this.pushHistory?.();
-},
+    rect.meta = el;
+
+    this.makeDraggable(rect);
+    this.layer.add(rect);
+
+    // 3) Seleccionarlo y abrir sus props
+    this.selectedElementId = el.id;
+    if (this.transformer) {
+      this.transformer.nodes([rect]);
+    }
+
+    this.updatePropertiesPanel(rect);
+    this.renderLayersTree();
+    this.layer.draw();
+    this.pushHistory?.();
+  },
 
 
   reorderElements(newOrder) {
@@ -2474,40 +3048,40 @@ addRectElement() {
     this.pushHistory && this.pushHistory();
   },
 
-groupSelected() {
-  if (!this.currentOverlay || !this.transformer) return;
-  const nodes = this.transformer.nodes();
-  if (!nodes.length) return;
+  groupSelected() {
+    if (!this.currentOverlay || !this.transformer) return;
+    const nodes = this.transformer.nodes();
+    if (!nodes.length) return;
 
-  const ids = nodes.map(n => n.meta?.id).filter(Boolean);
-  if (!ids.length) return;
+    const ids = nodes.map(n => n.meta?.id).filter(Boolean);
+    if (!ids.length) return;
 
-  if (!Array.isArray(this.currentOverlay.groups)) {
-    this.currentOverlay.groups = [];
-  }
+    if (!Array.isArray(this.currentOverlay.groups)) {
+      this.currentOverlay.groups = [];
+    }
 
-  // 1) Sacar estos ids de cualquier grupo previo
-  this.currentOverlay.groups.forEach(g => {
-    g.children = g.children.filter(id => !ids.includes(id));
-  });
+    // 1) Sacar estos ids de cualquier grupo previo
+    this.currentOverlay.groups.forEach(g => {
+      g.children = g.children.filter(id => !ids.includes(id));
+    });
 
-  // 2) Eliminar grupos que se hayan quedado vacíos
-  this.currentOverlay.groups = this.currentOverlay.groups.filter(
-    g => Array.isArray(g.children) && g.children.length > 0
-  );
+    // 2) Eliminar grupos que se hayan quedado vacíos
+    this.currentOverlay.groups = this.currentOverlay.groups.filter(
+      g => Array.isArray(g.children) && g.children.length > 0
+    );
 
-  // 3) Crear grupo NUEVO con la selección actual
-  const index = this.currentOverlay.groups.length + 1;
-  const group = {
-    id: 'grp-' + crypto.randomUUID(),
-    name: 'Grupo ' + index,
-    children: ids,
-  };
-  this.currentOverlay.groups.push(group);
+    // 3) Crear grupo NUEVO con la selección actual
+    const index = this.currentOverlay.groups.length + 1;
+    const group = {
+      id: 'grp-' + crypto.randomUUID(),
+      name: 'Grupo ' + index,
+      children: ids,
+    };
+    this.currentOverlay.groups.push(group);
 
-  this.renderLayersTree();
-  this.pushHistory?.();
-},
+    this.renderLayersTree();
+    this.pushHistory?.();
+  },
 
 
 
