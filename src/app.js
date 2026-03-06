@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
+const crypto = require('crypto');
 
 
 // Controllers
@@ -103,6 +104,45 @@ app.get('/overlay/:id', (req, res) => {
   res.sendFile(path.join(__dirname, '../public', 'overlay.html'));
 });
 
+// Cache de imágenes TikTok / Minecraft para el editor
+app.post('/api/cache-image', async (req, res) => {
+  try {
+    const { url } = req.body || {};
+    if (!url) {
+      return res.status(400).json({ success: false, error: 'url requerida' });
+    }
+
+    const hash = crypto.createHash('sha1').update(url).digest('hex');
+    const extFromUrl = path.extname(new URL(url).pathname) || '.png';
+    const ext = extFromUrl.toLowerCase().split('?')[0] || '.png';
+
+    const cacheDir = path.join(__dirname, '..', 'public', 'cache');
+    if (!fs.existsSync(cacheDir)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
+    }
+
+    const fileName = `${hash}${ext}`;
+    const filePath = path.join(cacheDir, fileName);
+
+    // Si ya está cacheada, devolver directamente
+    if (!fs.existsSync(filePath)) {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const buf = await resp.arrayBuffer
+        ? Buffer.from(await resp.arrayBuffer())
+        : await resp.buffer(); // soporta fetch nativo o node-fetch
+      fs.writeFileSync(filePath, buf);
+    }
+
+    return res.json({
+      success: true,
+      cachedUrl: `/cache/${fileName}`
+    });
+  } catch (e) {
+    console.error('Error cacheando imagen', e);
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
 
 
 // Iniciar servidor

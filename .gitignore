@@ -10,4 +10,6 @@ stats.json
 package-lock.json
 Scrapper.js
 overlays.json
-.continue/
+.continue
+public/cache/*
+!public/cache/.gitkeep

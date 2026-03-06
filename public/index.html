@@ -7,11 +7,14 @@
     <title>Minecraft TikTok Bridge | Control Center</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&
+            family=JetBrains+Mono:wght@400;500;600&
+            family=Poppins:wght@400;600&
+            family=Press+Start+2P&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="./css/style.css">
+    <link rel="stylesheet" href="./css/overlay-editor.css">
     <script src="./script/konva.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 </head>
@@ -548,117 +551,161 @@
                         </aside>
                     </div>
 
-                    <!-- Panel de Propiedades Flotante (aparece al seleccionar) -->
-                    <div id="propertiesPanel" class="properties-float" style="display: none;">
+                    <!-- Panel de Propiedades Flotante aparece al seleccionar -->
+                    <div id="propertiesPanel" class="properties-float" style="display:none;">
                         <div class="prop-header">
                             <span>Propiedades</span>
-                            <button class="btn-icon" onclick="overlayApp.closeProperties()"><i
-                                    class="fa-solid fa-xmark"></i></button>
+                            <button class="btn-icon" onclick="overlayApp.closeProperties()">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
                         </div>
+
                         <div class="prop-content">
-                            <div class="prop-row">
-                                <label>Posición X</label>
-                                <input type="number" id="propX" onchange="overlayApp.updateSelected('x', this.value)">
-                                <label>Y</label>
-                                <input type="number" id="propY" onchange="overlayApp.updateSelected('y', this.value)">
-                            </div>
-                            <div class="prop-row">
-                                <label>Escala</label>
-                                <input type="number" id="propScale" step="0.1"
-                                    onchange="overlayApp.updateSelected('scale', this.value)">
-                            </div>
-                            <div class="prop-row">
-                                <label>Opacidad</label>
-                                <input type="range" id="propOpacity" min="0" max="100"
-                                    oninput="overlayApp.updateSelected('opacity', this.value)">
+                            <!-- Estado vacío -->
+                            <div id="props-empty" class="prop-section"
+                                style="text-align:center; font-size:0.8rem; color:var(--text-muted);">
+                                Selecciona una capa o un grupo para ver sus propiedades.
                             </div>
 
-                            <!-- Simplificar la fila de borde (quitar alpha) -->
-                            <div class="prop-row">
-                                <label>Color Borde</label>
-                                <input type="color" id="propBorderColor"
-                                    onchange="overlayApp.updateSelected('borderColor', this.value)"
-                                    style="width: 60px;">
-                                <label style="min-width: auto;">Grosor</label>
-                                <input type="number" id="propBorderWidth" placeholder="px" style="width: 50px;" min="0"
-                                    max="20" onchange="overlayApp.updateSelected('borderWidth', this.value)">
-                            </div>
+                            <!-- Propiedades de capa (elemento) -->
+                            <div id="props-element" class="prop-section" style="display:none;">
+                                <!-- Posición y opacidad -->
+                                <div class="prop-section">
+                                    <div class="prop-row">
+                                        <label>Posición</label>
+                                        <input type="number" id="propX" placeholder="X"
+                                            onchange="overlayApp.onPropChange('x', this.value)">
+                                        <input type="number" id="propY" placeholder="Y"
+                                            onchange="overlayApp.onPropChange('y', this.value)">
+                                    </div>
 
-                            <div class="prop-section">
-                                <label>Fondo</label>
-                                <input type="color" id="propBgColor"
-                                    onchange="overlayApp.updateSelected('backgroundColor', this.value)" value="#1e293b">
-                                <label style="font-size: 0.7rem; margin-top: 0.3rem;">Transparencia</label>
-                                <input type="range" id="propBgAlpha" min="0" max="100"
-                                    oninput="overlayApp.updateSelected('backgroundAlpha', this.value)"
-                                    style="width: 100%;">
-                            </div>
+                                    <div class="prop-row">
+                                        <label>Opacidad</label>
+                                        <input type="range" id="propOpacity" min="0" max="100"
+                                            oninput="overlayApp.onPropChange('opacity', this.value)">
+                                    </div>
+                                </div>
 
-                            <div class="prop-section">
-                                <label>Efectos</label>
-                                <input type="text" id="propBoxShadow" placeholder="0 0 10px #06b6d4"
-                                    onchange="overlayApp.updateSelected('boxShadow', this.value)"
-                                    style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glass); color: white; padding: 0.3rem;">
-                                <label style="font-size: 0.7rem; margin-top: 0.3rem;">Redondeo (px)</label>
-                                <input type="number" id="propBorderRadius" value="0" min="0"
-                                    onchange="overlayApp.updateSelected('borderRadius', this.value)"
-                                    style="width: 100%;">
-                            </div>
+                                <!-- Estilo básico (rect / grupos) -->
+                                <!-- Estilo básico rect -->
+                                <div class="prop-section">
+                                    <div class="prop-row">
+                                        <label>Fondo</label>
+                                        <input type="color" id="propBgColor"
+                                            oninput="overlayApp.onPropChange('bgColor', this.value)">
+                                        <input type="range" id="propBgAlpha" min="0" max="100" value="100"
+                                            oninput="overlayApp.onPropChange('bgAlpha', this.value)"
+                                            title="Transparencia fondo (%)">
+                                    </div>
 
-                            <div class="prop-section" id="textEditorSection" style="display: none;">
-                                <label>Texto</label>
-                                <textarea id="propTextContent" rows="2"
-                                    oninput="overlayApp.updateSelected('text', this.value)"
-                                    style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glass); color: white; padding: 0.3rem;"></textarea>
-                                <div
-                                    style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
-                                    <select id="propFontFamily"
-                                        onchange="overlayApp.updateSelected('fontFamily', this.value)">
-                                        <option value="Inter">Default</option>
-                                        <option value="Minecraftia, monospace">Minecraft</option>
-                                        <option value="Arial">Arial</option>
+                                    <div class="prop-row">
+                                        <label>Borde</label>
+                                        <input type="color" id="propBorderColor"
+                                            oninput="overlayApp.onPropChange('borderColor', this.value)"
+                                            style="width:60px;">
+                                        <input type="range" id="propBorderAlpha" min="0" max="100" value="100"
+                                            title="Transparencia borde (%)"
+                                            oninput="overlayApp.onPropChange('borderAlpha', this.value)">
+                                        <input type="number" id="propBorderWidth" min="0" max="20"
+                                            onchange="overlayApp.onPropChange('borderWidth', this.value)"
+                                            style="width:50px;" placeholder="px">
+                                    </div>
+
+                                </div>
+
+
+                                <!-- Texto -->
+                                <div class="prop-section" id="textEditorSection" style="display:none;">
+                                    <label>Texto</label>
+                                    <textarea id="propTextContent" rows="2"
+                                        oninput="overlayApp.onPropChange('text', this.value)"
+                                        style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border-glass); color:white; padding:0.3rem;"></textarea>
+
+                                    <div
+                                        style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-top:0.5rem;">
+                                        <select id="propFontFamily"
+                                            onchange="overlayApp.onPropChange('fontFamily', this.value)">
+                                            <option value="Inter">Default</option>
+                                            <option value="'Poppins', system-ui, sans-serif">Redonda (Poppins)</option>
+                                            <option value="'Press Start 2P', cursive">Pixel retro</option>
+                                            <option value="'Minecraftia', monospace">Minecraft (si subes la fuente)
+                                            </option>
+                                            <option value="Arial">Arial</option>
+                                        </select>
+
+                                        <input type="number" id="propFontSize" value="24" min="8" max="120"
+                                            onchange="overlayApp.onPropChange('fontSize', this.value)" placeholder="px">
+                                    </div>
+
+                                    <div class="prop-row" style="margin-top:0.5rem;">
+                                        <label>Color texto</label>
+                                        <input type="color" id="propTextColor"
+                                            oninput="overlayApp.onPropChange('textColor', this.value)">
+                                        <!-- Alpha de texto (0-100%) -->
+                                        <input type="range" id="propTextAlpha" min="0" max="100" value="100"
+                                            title="Transparencia texto (%)"
+                                            oninput="overlayApp.onPropChange('textAlpha', this.value)">
+                                    </div>
+                                </div>
+
+                                <!-- Animación base / por capa -->
+                                <div class="prop-section">
+                                    <label>Animación</label>
+                                    <select id="propAnimation"
+                                        onchange="overlayApp.onPropChange('animation', this.value)">
+                                        <option value="">Ninguna</option>
+                                        <option value="breathe">Respiración</option>
+                                        <option value="float">Flotar</option>
+                                        <option value="shake">Sacudir</option>
+                                        <option value="flash">Flash</option>
                                     </select>
-                                    <input type="number" id="propFontSize" value="24" min="8" max="120"
-                                        onchange="overlayApp.updateSelected('fontSize', this.value)" placeholder="px">
+
+                                    <label style="font-size:0.7rem; margin-top:0.3rem;">Duración (s)</label>
+                                    <input type="number" id="propAnimDuration" step="0.1" min="0.1" max="10" value="3"
+                                        onchange="overlayApp.onPropChange('animDuration', this.value)">
                                 </div>
-                                <input type="text" id="propTextShadow" placeholder="2px 2px 4px #000"
-                                    onchange="overlayApp.updateSelected('textShadow', this.value)"
-                                    style="width: 100%; margin-top: 0.3rem; background: rgba(0,0,0,0.3); border: 1px solid var(--border-glass); color: white;">
+
+
+                                <!-- Trigger TikTok vinculado -->
+                                <div class="prop-section">
+                                    <label>Trigger vinculado</label>
+                                    <select id="propTrigger" onchange="overlayApp.onPropChange('trigger', this.value)">
+                                        <option value="">Ninguno</option>
+                                        <!-- se rellena dinámicamente -->
+                                    </select>
+
+                                </div>
                             </div>
 
-                            <!-- Reemplazar la sección de controles de animación en el propertiesPanel -->
-                            <div class="prop-section">
-                                <label>Animación CSS</label>
-                                <select id="propAnimation"
-                                    onchange="overlayApp.updateSelected('animation', this.value)">
+                            <!-- Propiedades de grupo -->
+                            <div id="props-group" class="prop-section" style="display:none;">
+                                <h4 style="margin-bottom:0.5rem;">Grupo seleccionado</h4>
+
+                                <label>Nombre</label>
+                                <input type="text" id="propGroupName">
+
+                                <label>Color de fondo del grupo</label>
+                                <input type="color" id="propGroupBg">
+
+                                <label style="margin-top:0.5rem;">
+                                    <input type="checkbox" id="propGroupHideOthers">
+                                    Ocultar otros grupos al activar
+                                </label>
+
+                                <label style="margin-top:0.5rem;">Animación al activar</label>
+                                <select id="propGroupAnimation">
                                     <option value="">Ninguna</option>
-                                    <option value="breathe">Respiración</option>
-                                    <option value="float">Flotar</option>
-                                    <option value="spin">Girar</option>
-                                    <option value="pulse">Pulsar</option>
-                                    <option value="shake">Sacudir</option>
-                                    <option value="glow">Brillo</option>
+                                    <option value="breathe">Breathing</option>
+                                    <option value="shake">Shake</option>
+                                    <option value="flash">Flash</option>
                                 </select>
-                                <div style="margin-top: 0.5rem;">
-                                    <label style="font-size: 0.7rem;">Velocidad (s)</label>
-                                    <input type="number" id="propAnimDuration" step="0.1" min="0.1" max="10" value="3"
-                                        style="width: 100%;" onchange="overlayApp.updateAnimationSpeed(this.value)">
-                                </div>
-                            </div>
-                            <div class="prop-section">
-                                <label>HTML Personalizado</label>
-                                <textarea id="propCustomHtml" rows="2" placeholder="<div class='efecto'>...</div>"
-                                    onchange="overlayApp.updateSelected('customHtml', this.value)"></textarea>
-                            </div>
-                            <div class="prop-section">
-                                <label>Trigger vinculado</label>
-                                <select id="propTrigger" onchange="overlayApp.updateSelected('trigger', this.value)">
-                                    <option value="">Ninguno</option>
-                                    <!-- Se llena dinámicamente con acciones disponibles -->
-                                </select>
+
+                                <label style="font-size:0.7rem; margin-top:0.3rem;">Duración (ms)</label>
+                                <input type="number" id="propGroupAnimDuration" min="0" step="100">
                             </div>
                         </div>
                     </div>
+
 
                 </div>
             </div>

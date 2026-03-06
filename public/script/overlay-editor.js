@@ -5,8 +5,6 @@ const OverlayEditor = {
   toggleGrid() { },
   filterOverlays() { },
   filterLayers() { },
-  closeProperties() { },
-  updateSelected() { },
   updateAnimationSpeed() { },
 
   // Estado simple
@@ -21,6 +19,7 @@ const OverlayEditor = {
   historyIndex: -1,
   isRestoringHistory: false,
   clipboardElement: null,
+  actionsCache: [],
 
 
   // Vista (zoom/pan de la cartulina)
@@ -32,6 +31,7 @@ const OverlayEditor = {
 
   // Selección
   selectedElementId: null,
+  selectedGroupId: null,
 
   // Konva
   stage: null,
@@ -39,12 +39,41 @@ const OverlayEditor = {
   transformer: null,
 
 
+
+
+
+
+
   // Init general
   async init() {
     await this.loadGifts();
     await this.loadRenders();
     await this.loadOverlays();
+    await this.loadActionsForTriggers();
     this.setupUIHooks();
+  },
+
+
+  // --------- Inicialización ---------
+  async loadActionsForTriggers() {
+    try {
+      const res = await fetch('/api/actions');
+      this.actionsCache = await res.json();
+    } catch (e) {
+      console.error('Error cargando acciones para triggers', e);
+      this.actionsCache = [];
+    }
+  },
+
+  getTriggerOptionsHtml() {
+    let html = '<option value="">Ninguno</option>';
+    (this.actionsCache || []).forEach(a => {
+      const id = a.id || a._id || a.trigger || '';
+      const label = a.name || a.trigger || id || 'Acción';
+      if (!id) return;
+      html += `<option value="${id}">${label}</option>`;
+    });
+    return html;
   },
 
   // --------- Carga de datos ---------
@@ -98,56 +127,79 @@ const OverlayEditor = {
         <span class="item-label">${name}</span>
       `;
 
-      div.onclick = () => {
+      div.onclick = async () => {
         if (!this.currentOverlay) return;
-        this.addImageElement(imgUrl, name, isGift ? 'gift' : 'render');
+
+        try {
+          const res = await fetch('/api/cache-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: imgUrl })
+          });
+          const data = await res.json();
+          const finalUrl = data.success ? data.cachedUrl : imgUrl;
+
+          this.addImageElement(finalUrl, name, isGift ? 'gift' : 'render');
+        } catch (e) {
+          console.error('Error cacheando imagen', e);
+          // Fallback: usar URL original
+          this.addImageElement(imgUrl, name, isGift ? 'gift' : 'render');
+        }
       };
+
 
       container.appendChild(div);
     });
   },
 
   // --------- Lista de overlays (tarjetas) ---------
-  renderOverlayList() {
-    const grid = document.getElementById('overlaysGrid');
-    const count = document.getElementById('overlayCount');
-    if (!grid) return;
-    count.textContent = this.overlays.length;
+renderOverlayList() {
+  const grid  = document.getElementById('overlaysGrid');
+  const count = document.getElementById('overlayCount');
+  if (!grid) return;
 
-    if (this.overlays.length === 0) {
-      grid.innerHTML = `
-        <div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:3rem;">
-          <i class="fa-solid fa-layer-group" style="font-size:2rem;margin-bottom:1rem;opacity:0.5;"></i>
-          <div>No hay overlays configurados</div>
-        </div>`;
-      return;
-    }
+  if (count) count.textContent = this.overlays.length;
 
-    grid.innerHTML = this.overlays.map(ovl => `
-      <div class="overlay-preview-card" onclick="OverlayEditor.editOverlay('${ovl.id}')">
-        <div class="overlay-thumb" style="background:#1a1a2e;position:relative;overflow:hidden;">
-          <!-- Aquí podrías dibujar un SVG simple o solo dejar el fondo -->
-        </div>
-        <div class="overlay-info">
-          <div class="overlay-title">${ovl.name || 'Sin nombre'}</div>
-          <div class="overlay-meta">
-            ${(ovl.elements || []).length} elementos
-          </div>
-        </div>
-        <div class="overlay-actions">
-          <button class="btn-icon" onclick="event.stopPropagation(); OverlayEditor.copyOverlayUrl('${ovl.id}')">
-            <i class="fa-solid fa-link"></i>
-          </button>
-          <button class="btn-icon" onclick="event.stopPropagation(); OverlayEditor.editOverlay('${ovl.id}')">
-            <i class="fa-solid fa-pen"></i>
-          </button>
-          <button class="btn-icon delete" onclick="event.stopPropagation(); OverlayEditor.deleteOverlay('${ovl.id}')">
-            <i class="fa-solid fa-trash"></i>
-          </button>
-        </div>
+  if (this.overlays.length === 0) {
+    grid.innerHTML = `
+      <div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:3rem;">
+        <i class="fa-solid fa-layer-group" style="font-size:2rem;margin-bottom:1rem;opacity:0.5"></i>
+        <div>No hay overlays configurados</div>
       </div>
-    `).join('');
-  },
+    `;
+    return;
+  }
+
+  grid.innerHTML = this.overlays.map(ovl => `
+    <div class="overlay-preview-card" onclick="OverlayEditor.editOverlay('${ovl.id}')">
+      <div class="overlay-thumb" style="background:#1a1a2e;position:relative;overflow:hidden;">
+        ${
+          ovl.preview
+            ? `<img src="${ovl.preview}"
+                    alt="${ovl.name || 'Overlay'}"
+                    style="width:100%;height:100%;object-fit:contain;display:block;" />`
+            : ''
+        }
+      </div>
+      <div class="overlay-info">
+        <div class="overlay-title">${ovl.name || 'Sin nombre'}</div>
+        <div class="overlay-meta">${(ovl.elements || []).length} elementos</div>
+      </div>
+      <div class="overlay-actions">
+        <button class="btn-icon" onclick="event.stopPropagation(); OverlayEditor.copyOverlayUrl('${ovl.id}')">
+          <i class="fa-solid fa-link"></i>
+        </button>
+        <button class="btn-icon" onclick="event.stopPropagation(); OverlayEditor.editOverlay('${ovl.id}')">
+          <i class="fa-solid fa-pen"></i>
+        </button>
+        <button class="btn-icon delete" onclick="event.stopPropagation(); OverlayEditor.deleteOverlay('${ovl.id}')">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
+},
+
 
   copyOverlayUrl(id) {
     const url = `${location.origin}/overlay/${id}`;
@@ -593,23 +645,29 @@ const OverlayEditor = {
 
       if (el.type === 'text') {
         const text = new Konva.Text({
-          x: el.x, y: el.y,
+          x: el.x,
+          y: el.y,
           text: el.text || '',
           fontSize: el.fontSize || 24,
           fontFamily: el.fontFamily || 'Inter',
           fill: el.color || 'white',
           opacity: (el.opacity ?? 100) / 100,
           rotation: el.rotation || 0,
-          scaleX: el.scaleX || 1,    // ← AÑADE
-          scaleY: el.scaleY || 1     // ← AÑADE
+          scaleX: el.scaleX || 1,
+          scaleY: el.scaleY || 1,
         });
 
+        text.meta = el;
         text._meta = el;
+
         this.makeDraggable(text);
         this.layer.add(text);
-      } else if (el.src) {
+        this.applyBaseAnimation(text);
+      }
+      else if (el.src) {
         this.addImageFromElement(el);
-      } else if (el.type === 'rect') {
+      }
+      else if (el.type === 'rect') {
         const rect = new Konva.Rect({
           x: el.x,
           y: el.y,
@@ -617,14 +675,20 @@ const OverlayEditor = {
           height: el.height || 200,
           fill: el.backgroundColor || 'transparent',
           stroke: el.borderColor || '#06b6d4',
-          strokeWidth: el.borderWidth || 2,
+          strokeWidth: el.borderWidth ?? 2,
           opacity: (el.opacity ?? 100) / 100,
-          rotation: el.rotation || 0
+          rotation: el.rotation || 0,
         });
+
+        rect.meta = el;
         rect._meta = el;
+
         this.makeDraggable(rect);
         this.layer.add(rect);
+
+        this.applyBaseAnimation(rect);
       }
+
     });
 
     this.renderLayersTree();
@@ -638,8 +702,8 @@ const OverlayEditor = {
 
     const typeIcon =
       el.type === 'image' ? 'fa-image' :
-      el.type === 'text'  ? 'fa-font'  :
-      'fa-square';
+        el.type === 'text' ? 'fa-font' :
+          'fa-square';
 
     const name =
       el.name ||
@@ -786,10 +850,10 @@ const OverlayEditor = {
         this.layer && this.layer.batchDraw();
       };
 
-  div.ondblclick = e => {
-    e.stopPropagation();
-    this.renameLayer(id);
-  };
+      div.ondblclick = e => {
+        e.stopPropagation();
+        this.renameLayer(id);
+      };
 
       const vis = div.querySelector('.layer-visibility');
       if (vis) {
@@ -801,21 +865,21 @@ const OverlayEditor = {
     });
 
     // Click en grupo -> selección de grupo
-Array.from(tree.querySelectorAll('.layer-group')).forEach(div => {
-  const groupId = div.dataset.groupId;
+    Array.from(tree.querySelectorAll('.layer-group')).forEach(div => {
+      const groupId = div.dataset.groupId;
 
-  // Click simple -> selecciona grupo
-  div.onclick = e => {
-    e.stopPropagation();
-    this.selectGroupById(groupId);
-  };
+      // Click simple -> selecciona grupo
+      div.onclick = e => {
+        e.stopPropagation();
+        this.selectGroupById(groupId);
+      };
 
-  // Doble click -> renombrar grupo
-  div.ondblclick = e => {
-    e.stopPropagation();
-    this.renameGroup(groupId);
-  };
-});
+      // Doble click -> renombrar grupo
+      div.ondblclick = e => {
+        e.stopPropagation();
+        this.renameGroup(groupId);
+      };
+    });
 
 
     tree.scrollTop = prevScroll;
@@ -831,6 +895,7 @@ Array.from(tree.querySelectorAll('.layer-group')).forEach(div => {
   },
 
   selectElementById(id) {
+    this.selectedGroupId = null;
     this.selectedElementId = id;
 
     const shape = this.findShapeByElementId(id);
@@ -858,18 +923,18 @@ Array.from(tree.querySelectorAll('.layer-group')).forEach(div => {
       .map(id => this.findShapeByElementId(id))
       .filter(Boolean);
 
+    this.selectedGroupId = groupId;       // ← NUEVO
+    this.selectedElementId = null;
+
     if (!shapes.length) {
       this.transformer.nodes([]);
-      this.selectedElementId = null;
       this.updatePropertiesPanel(null);
       this.layer && this.layer.batchDraw();
       return;
     }
 
-    // Multi‑selección en el Transformer
-    this.selectedElementId = null;
     this.transformer.nodes(shapes);
-    this.updatePropertiesPanel(null); // De momento sin panel específico de grupo
+    this.updatePropertiesPanel(null);     // panel de grupo
     this.layer && this.layer.batchDraw();
   },
 
@@ -899,61 +964,61 @@ Array.from(tree.querySelectorAll('.layer-group')).forEach(div => {
     this.pushHistory?.();
   },
 
-deleteSelected() {
-  if (!this.currentOverlay) return;
+  deleteSelected() {
+    if (!this.currentOverlay) return;
 
-  const nodes = this.transformer?.nodes?.() || [];
-  const hasMulti = nodes.length > 1;
+    const nodes = this.transformer?.nodes?.() || [];
+    const hasMulti = nodes.length > 1;
 
-  let idsToDelete = [];
+    let idsToDelete = [];
 
-  if (hasMulti) {
-    // Borrar todo lo que esté en el Transformer (grupo o multi‑select)
-    idsToDelete = nodes
-      .map(n => n._meta?.id)
-      .filter(Boolean);
-  } else if (this.selectedElementId) {
-    // Caso clásico: una sola capa seleccionada
-    idsToDelete = [this.selectedElementId];
-  }
+    if (hasMulti) {
+      // Borrar todo lo que esté en el Transformer (grupo o multi‑select)
+      idsToDelete = nodes
+        .map(n => n._meta?.id)
+        .filter(Boolean);
+    } else if (this.selectedElementId) {
+      // Caso clásico: una sola capa seleccionada
+      idsToDelete = [this.selectedElementId];
+    }
 
-  if (!idsToDelete.length) return;
+    if (!idsToDelete.length) return;
 
-  // 1) Quitar del JSON de elementos
-  this.currentOverlay.elements = this.currentOverlay.elements.filter(
-    el => !idsToDelete.includes(el.id)
-  );
+    // 1) Quitar del JSON de elementos
+    this.currentOverlay.elements = this.currentOverlay.elements.filter(
+      el => !idsToDelete.includes(el.id)
+    );
 
-  // 2) Quitar esos ids de todos los grupos y eliminar grupos vacíos
-  if (Array.isArray(this.currentOverlay.groups)) {
-    this.currentOverlay.groups = this.currentOverlay.groups
-      .map(g => {
-        g.children = (g.children || []).filter(id => !idsToDelete.includes(id));
-        return g;
-      })
-      .filter(g => (g.children || []).length > 0);
-  }
+    // 2) Quitar esos ids de todos los grupos y eliminar grupos vacíos
+    if (Array.isArray(this.currentOverlay.groups)) {
+      this.currentOverlay.groups = this.currentOverlay.groups
+        .map(g => {
+          g.children = (g.children || []).filter(id => !idsToDelete.includes(id));
+          return g;
+        })
+        .filter(g => (g.children || []).length > 0);
+    }
 
-  // 3) Quitar del Stage (Konva)
-  idsToDelete.forEach(id => {
-    const shape = this.findShapeByElementId(id);
-    if (shape) shape.destroy();
-  });
+    // 3) Quitar del Stage (Konva)
+    idsToDelete.forEach(id => {
+      const shape = this.findShapeByElementId(id);
+      if (shape) shape.destroy();
+    });
 
-  // 4) Limpiar selección y refrescar UI
-  this.selectedElementId = null;
-  if (this.transformer) {
-    this.transformer.nodes([]);
-  }
-  this.updatePropertiesPanel(null);
-  this.renderLayersTree();
-  if (this.layer) {
-    this.layer.draw();
-  }
+    // 4) Limpiar selección y refrescar UI
+    this.selectedElementId = null;
+    if (this.transformer) {
+      this.transformer.nodes([]);
+    }
+    this.updatePropertiesPanel(null);
+    this.renderLayersTree();
+    if (this.layer) {
+      this.layer.draw();
+    }
 
-  // 5) Historial
-  this.pushHistory && this.pushHistory();
-},
+    // 5) Historial
+    this.pushHistory && this.pushHistory();
+  },
 
 
 
@@ -1007,6 +1072,7 @@ deleteSelected() {
       konvaImg._meta = el;
       this.makeDraggable(konvaImg);
       this.layer.add(konvaImg);
+      this.applyBaseAnimation(konvaImg);
       this.layer.draw();
     };
     img.src = el.src;
@@ -1018,88 +1084,88 @@ deleteSelected() {
     shape.draggable(true);
 
     // 2) Al empezar a arrastrar, seleccionarlo
-shape.on('dragstart', () => {
-  const nodes = this.transformer?.nodes?.() || [];
-  const isMulti = nodes.length > 1 && nodes.includes(shape);
+    shape.on('dragstart', () => {
+      const nodes = this.transformer?.nodes?.() || [];
+      const isMulti = nodes.length > 1 && nodes.includes(shape);
 
-  if (isMulti) {
-    shape._lastGroupDragPos = { x: shape.x(), y: shape.y() };
-  } else {
-    this.transformer.nodes([shape]);
-    this.selectedElementId = shape._meta?.id || null;
-    this.updatePropertiesPanel(shape);
-  }
+      if (isMulti) {
+        shape._lastGroupDragPos = { x: shape.x(), y: shape.y() };
+      } else {
+        this.transformer.nodes([shape]);
+        this.selectedElementId = shape._meta?.id || null;
+        this.updatePropertiesPanel(shape);
+      }
 
-  this.renderLayersTree();
-  this.layer && this.layer.batchDraw();
-});
+      this.renderLayersTree();
+      this.layer && this.layer.batchDraw();
+    });
 
 
-shape.on('dragmove', () => {
-  const nodes = this.transformer?.nodes?.() || [];
-  const isMulti = nodes.length > 1 && nodes.includes(shape);
+    shape.on('dragmove', () => {
+      const nodes = this.transformer?.nodes?.() || [];
+      const isMulti = nodes.length > 1 && nodes.includes(shape);
 
-  // Conjunto activo: grupo o shape suelto
-  const active = isMulti ? nodes : [shape];
+      // Conjunto activo: grupo o shape suelto
+      const active = isMulti ? nodes : [shape];
 
-  const logicalW = this.currentOverlay?.canvas?.width || 1080;
-  const logicalH = this.currentOverlay?.canvas?.height || 1920;
+      const logicalW = this.currentOverlay?.canvas?.width || 1080;
+      const logicalH = this.currentOverlay?.canvas?.height || 1920;
 
-  // Posición anterior del "líder"
-  const last = shape._lastGroupDragPos || { x: shape.x(), y: shape.y() };
-  let dx = shape.x() - last.x;
-  let dy = shape.y() - last.y;
+      // Posición anterior del "líder"
+      const last = shape._lastGroupDragPos || { x: shape.x(), y: shape.y() };
+      let dx = shape.x() - last.x;
+      let dy = shape.y() - last.y;
 
-  shape._lastGroupDragPos = { x: shape.x(), y: shape.y() };
+      shape._lastGroupDragPos = { x: shape.x(), y: shape.y() };
 
-  // Rectángulo unión actual de todos los nodos
-  const rects = active.map(n =>
-    n.getClientRect({ relativeTo: this.layer })
-  );
+      // Rectángulo unión actual de todos los nodos
+      const rects = active.map(n =>
+        n.getClientRect({ relativeTo: this.layer })
+      );
 
-  const union = rects.reduce((acc, r) => {
-    if (!acc) return { x: r.x, y: r.y, width: r.width, height: r.height };
-    const minX = Math.min(acc.x, r.x);
-    const minY = Math.min(acc.y, r.y);
-    const maxX = Math.max(acc.x + acc.width, r.x + r.width);
-    const maxY = Math.max(acc.y + acc.height, r.y + r.height);
-    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-  }, null);
+      const union = rects.reduce((acc, r) => {
+        if (!acc) return { x: r.x, y: r.y, width: r.width, height: r.height };
+        const minX = Math.min(acc.x, r.x);
+        const minY = Math.min(acc.y, r.y);
+        const maxX = Math.max(acc.x + acc.width, r.x + r.width);
+        const maxY = Math.max(acc.y + acc.height, r.y + r.height);
+        return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+      }, null);
 
-  if (!union) return;
+      if (!union) return;
 
-  // Cómo quedaría el grupo si aplicamos dx,dy
-  let newX = union.x + dx;
-  let newY = union.y + dy;
+      // Cómo quedaría el grupo si aplicamos dx,dy
+      let newX = union.x + dx;
+      let newY = union.y + dy;
 
-  // Clamps para que TODO el grupo quede dentro 0..logicalW / 0..logicalH
-  if (newX < 0) {
-    dx += -newX;
-    newX = 0;
-  }
-  if (newY < 0) {
-    dy += -newY;
-    newY = 0;
-  }
+      // Clamps para que TODO el grupo quede dentro 0..logicalW / 0..logicalH
+      if (newX < 0) {
+        dx += -newX;
+        newX = 0;
+      }
+      if (newY < 0) {
+        dy += -newY;
+        newY = 0;
+      }
 
-  const overRight = newX + union.width - logicalW;
-  if (overRight > 0) {
-    dx -= overRight;
-  }
+      const overRight = newX + union.width - logicalW;
+      if (overRight > 0) {
+        dx -= overRight;
+      }
 
-  const overBottom = newY + union.height - logicalH;
-  if (overBottom > 0) {
-    dy -= overBottom;
-  }
+      const overBottom = newY + union.height - logicalH;
+      if (overBottom > 0) {
+        dy -= overBottom;
+      }
 
-  // Aplicar el desplazamiento corregido a TODOS los nodos
-  active.forEach(node => {
-    node.x(node.x() + dx);
-    node.y(node.y() + dy);
-  });
+      // Aplicar el desplazamiento corregido a TODOS los nodos
+      active.forEach(node => {
+        node.x(node.x() + dx);
+        node.y(node.y() + dy);
+      });
 
-  this.layer && this.layer.batchDraw();
-});
+      this.layer && this.layer.batchDraw();
+    });
 
 
 
@@ -1270,83 +1336,546 @@ shape.on('dragmove', () => {
   },
 
 
-
-
-
-
-
-  // --------- Panel de propiedades (muy básico) ---------
+  // --------- Panel de propiedades grupo o capa ---------
   updatePropertiesPanel(shape) {
-    // Aquí conectas con tus inputs: x, y, rotación, opacidad, texto, etc.
-    // Ejemplo mínimo:
+    const panel = document.getElementById('propertiesPanel');
+    const empty = document.getElementById('props-empty');
+    const elSec = document.getElementById('props-element');
+    const grpSec = document.getElementById('props-group');
+    const textSection = document.getElementById('textEditorSection');
+
+    if (!panel || !empty || !elSec || !grpSec) return;
+
+    const nodes = this.transformer?.nodes?.() || [];
+    const isMulti = nodes.length > 1;
+    const hasSelection = !!shape || !!this.selectedGroupId || nodes.length > 0;
+
+    // Nada seleccionado → cerramos panel
+    if (!hasSelection) {
+      this.closeProperties();
+      return;
+    }
+
+    // Hay algo seleccionado → mostramos panel
+    panel.style.display = 'block';
+
+    // Reset secciones
+    empty.style.display = 'none';
+    elSec.style.display = 'none';
+    grpSec.style.display = 'none';
+    if (textSection) textSection.style.display = 'none';
+
+    // --- 1) Grupo seleccionado ---
+    if (this.selectedGroupId && (!shape || isMulti)) {
+      const group = this.currentOverlay?.groups?.find(g => g.id === this.selectedGroupId);
+      if (!group) {
+        this.closeProperties();
+        return;
+      }
+
+      grpSec.style.display = 'block';
+
+      const inputName = document.getElementById('propGroupName');
+      const inputBg = document.getElementById('propGroupBg');
+      const inputHide = document.getElementById('propGroupHideOthers');
+      const inputAnim = document.getElementById('propGroupAnimation');
+      const inputDur = document.getElementById('propGroupAnimDuration');
+
+      const runtime = group.runtime || {};
+      const onExec = runtime.onActionExecute || {};
+
+      // Valores actuales
+      if (inputName) inputName.value = group.name || '';
+      if (inputBg) inputBg.value = runtime.bgColor || '#000000';
+      if (inputHide) inputHide.checked = !!onExec.hideOtherGroups;
+      if (inputAnim) inputAnim.value = onExec.animation || '';
+      if (inputDur) inputDur.value = onExec.durationMs || 0;
+
+      // Handlers
+      if (inputName) {
+        inputName.onchange = e => {
+          group.name = e.target.value;
+          this.renderLayersTree();
+          this.pushHistory?.();
+        };
+      }
+
+      if (inputBg) {
+        inputBg.oninput = e => {
+          group.runtime = group.runtime || {};
+          group.runtime.bgColor = e.target.value;
+          this.pushHistory?.();
+        };
+      }
+
+      if (inputHide) {
+        inputHide.onchange = e => {
+          group.runtime = group.runtime || {};
+          group.runtime.onActionExecute = group.runtime.onActionExecute || {};
+          group.runtime.onActionExecute.hideOtherGroups = !!e.target.checked;
+          this.pushHistory?.();
+        };
+      }
+
+      if (inputAnim) {
+        inputAnim.onchange = e => {
+          group.runtime = group.runtime || {};
+          group.runtime.onActionExecute = group.runtime.onActionExecute || {};
+          group.runtime.onActionExecute.animation = e.target.value || '';
+          this.pushHistory?.();
+        };
+      }
+
+      if (inputDur) {
+        inputDur.onchange = e => {
+          const v = parseInt(e.target.value || '0', 10) || 0;
+          group.runtime = group.runtime || {};
+          group.runtime.onActionExecute = group.runtime.onActionExecute || {};
+          group.runtime.onActionExecute.durationMs = v;
+          this.pushHistory?.();
+        };
+      }
+
+      return;
+    }
+
+    // --- 2) Capa individual ---
+    if (!shape) {
+      this.closeProperties();
+      return;
+    }
+
+    let m = shape.meta || shape._meta;
+    if (!m) {
+      this.closeProperties();
+      return;
+    }
+
+    // Normalizar
+    shape.meta = m;
+    shape._meta = m;
+
+    elSec.style.display = 'block';
+
+    const inputName = document.getElementById('propName');
     const inputX = document.getElementById('propX');
     const inputY = document.getElementById('propY');
-    const inputScale = document.getElementById('propScale');
     const inputOpacity = document.getElementById('propOpacity');
+    const inputBg = document.getElementById('propBgColor');
+    const inputBgAlpha = document.getElementById('propBgAlpha');
+    const inputBorderColor = document.getElementById('propBorderColor');
+    const inputBorderAlpha = document.getElementById('propBorderAlpha');
+    const inputBorderWidth = document.getElementById('propBorderWidth');
+    const inputFontFamily = document.getElementById('propFontFamily');
+    const inputFontSize = document.getElementById('propFontSize');
+    const inputTextColor = document.getElementById('propTextColor');
+    const inputTextAlpha = document.getElementById('propTextAlpha');
+    const inputTextContent = document.getElementById('propTextContent');
+    const inputAnim = document.getElementById('propAnimation');
+    const inputAnimDur = document.getElementById('propAnimDuration');
+    const inputTrigger = document.getElementById('propTrigger');
 
-    if (!inputX) return;
+    // Handlers
+    if (inputName) inputName.onchange = e => this.onPropChange('name', e.target.value);
+    if (inputX) inputX.onchange = e => this.onPropChange('x', e.target.value);
+    if (inputY) inputY.onchange = e => this.onPropChange('y', e.target.value);
+    if (inputOpacity) inputOpacity.oninput = e => this.onPropChange('opacity', e.target.value);
+    if (inputBg) inputBg.oninput = e => this.onPropChange('bgColor', e.target.value);
+    if (inputBgAlpha) inputBgAlpha.oninput = e => this.onPropChange('bgAlpha', e.target.value);
+    if (inputBorderColor) inputBorderColor.oninput = e => this.onPropChange('borderColor', e.target.value);
+    if (inputBorderAlpha) inputBorderAlpha.oninput = e => this.onPropChange('borderAlpha', e.target.value);
+    if (inputBorderWidth) inputBorderWidth.onchange = e => this.onPropChange('borderWidth', e.target.value);
+    if (inputFontFamily) inputFontFamily.onchange = e => this.onPropChange('fontFamily', e.target.value);
+    if (inputFontSize) inputFontSize.onchange = e => this.onPropChange('fontSize', e.target.value);
+    if (inputTextColor) inputTextColor.oninput = e => this.onPropChange('textColor', e.target.value);
+    if (inputTextAlpha) inputTextAlpha.oninput = e => this.onPropChange('textAlpha', e.target.value);
+    if (inputTextContent) inputTextContent.oninput = e => this.onPropChange('text', e.target.value);
+    if (inputAnim) inputAnim.onchange = e => this.onPropChange('animation', e.target.value);
+    if (inputAnimDur) inputAnimDur.onchange = e => this.onPropChange('animDuration', e.target.value);
 
-    if (!shape) {
-      inputX.value = '';
-      inputY.value = '';
-      if (inputScale) inputScale.value = 1;
-      if (inputOpacity) inputOpacity.value = 100;
+    if (inputTrigger) {
+      inputTrigger.innerHTML = this.getTriggerOptionsHtml();
+      inputTrigger.onchange = e => this.onPropChange('trigger', e.target.value);
+    }
+
+    // Valores iniciales
+    if (inputName) inputName.value = m.name || (m.type === 'text' ? (m.text || '') : '');
+    if (inputX) inputX.value = typeof m.x === 'number' ? m.x : Math.round(shape.x());
+    if (inputY) inputY.value = typeof m.y === 'number' ? m.y : Math.round(shape.y());
+    if (inputOpacity) inputOpacity.value = m.opacity ?? 100;
+
+        // Valores iniciales de Fondo/Borde para cualquier tipo de elemento
+        const baseColor  = m.baseBgColor    || m.backgroundColor || '#000000';
+        const alpha      = typeof m.bgAlpha === 'number' ? m.bgAlpha : 100;
+        const borderBase = m.baseBorderColor || m.borderColor    || '#06b6d4';
+        const bAlpha     = typeof m.borderAlpha === 'number' ? m.borderAlpha : 100;
+
+        if (inputBg)          inputBg.value          = baseColor;
+        if (inputBgAlpha)     inputBgAlpha.value     = alpha;
+        if (inputBorderColor) inputBorderColor.value = borderBase;
+        if (inputBorderAlpha) inputBorderAlpha.value = bAlpha;
+        if (inputBorderWidth) inputBorderWidth.value = m.borderWidth ?? 0;
+
+    if (m.type === 'text') {
+      if (textSection) textSection.style.display = 'block';
+
+      if (inputFontFamily) inputFontFamily.value = m.fontFamily || 'Inter';
+      if (inputFontSize) inputFontSize.value = m.fontSize || 32;
+
+      const textBase = m.baseTextColor || m.color || '#ffffff';
+      const tAlpha = typeof m.textAlpha === 'number' ? m.textAlpha : 100;
+
+      if (inputTextColor) inputTextColor.value = textBase;
+      if (inputTextAlpha) inputTextAlpha.value = tAlpha;
+      if (inputTextContent) inputTextContent.value = m.text || '';
+    }
+
+    if (inputAnim) inputAnim.value = m.animationBase || '';
+    if (inputAnimDur) inputAnimDur.value = m.animationDurationSec || 3;
+    if (inputTrigger) inputTrigger.value = m.trigger || '';
+  },
+
+  hexToRgb(hex) {
+    if (!hex) return { r: 0, g: 0, b: 0 };
+    let h = hex.replace('#', '');
+    if (h.length === 3) {
+      h = h.split('').map(c => c + c).join('');
+    }
+    const num = parseInt(h, 16);
+    return {
+      r: (num >> 16) & 255,
+      g: (num >> 8) & 255,
+      b: num & 255,
+    };
+  },
+
+  makeRgba(hex, alpha01) {
+    const { r, g, b } = this.hexToRgb(hex);
+    const a = Math.max(0, Math.min(1, alpha01));
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  },
+
+
+  applyBaseAnimation(shape) {
+    const m = shape.meta || shape._meta;
+    if (!m || !this.layer) return;
+
+    // Parar animación anterior si existe
+    if (shape._baseAnimation) {
+      shape._baseAnimation.stop();
+      shape._baseAnimation = null;
+    }
+
+    const type = m.animationBase;
+    const duration = m.animationDurationSec || 3;
+
+    // Si no hay animación → restaurar estado base si lo tenemos
+    if (!type) {
+      const state = shape._baseAnimState;
+      if (state) {
+        shape.position({ x: state.x, y: state.y });
+        shape.scaleX(state.scaleX);
+        shape.scaleY(state.scaleY);
+        shape.opacity(state.opacity);
+      }
+      this.layer.batchDraw();
       return;
     }
 
-    inputX.value = Math.round(shape.x());
-    inputY.value = Math.round(shape.y());
-    if (inputScale) inputScale.value = 1;
-    if (inputOpacity) inputOpacity.value = (shape._meta?.opacity ?? 100);
-  },
-
-  onPropChange(prop, value) {
-    const nodes = this.transformer.nodes();
-    if (!nodes.length) return;
-    const shape = nodes[0];
-    const m = shape._meta;
-    if (!m) return;
-
-    if (prop === 'x' || prop === 'y') {
-      const v = parseFloat(value) || 0;
-      if (prop === 'x') { shape.x(v); m.x = v; }
-      if (prop === 'y') { shape.y(v); m.y = v; }
-    } else if (prop === 'rotation') {
-      const v = parseFloat(value) || 0;
-      shape.rotation(v);
-      m.rotation = v;
-    } else if (prop === 'opacity') {
-      const v = parseFloat(value) || 100;
-      shape.opacity(v / 100);
-      m.opacity = v;
+    // Guardar estado base solo la primera vez
+    if (!shape._baseAnimState) {
+      shape._baseAnimState = {
+        x: shape.x(),
+        y: shape.y(),
+        scaleX: shape.scaleX(),
+        scaleY: shape.scaleY(),
+        opacity: shape.opacity(),
+      };
     }
-    this.layer.draw();
+    const base = shape._baseAnimState;
+
+    const period = duration * 1000;
+    const twoPi = Math.PI * 2;
+    const layer = this.layer;
+
+    const anim = new Konva.Animation(frame => {
+      if (!frame) return;
+      const t = frame.time % period;
+      const p = t / period; // 0..1
+
+      switch (type) {
+        case 'breathe': {
+          const amp = 0.05; // 5% de “respiración”
+          const s = 1 + amp * Math.sin(p * twoPi);
+          shape.scaleX(base.scaleX * s);
+          shape.scaleY(base.scaleY * s);
+          break;
+        }
+
+        case 'float': {
+          const amp = 15; // px arriba/abajo
+          const dy = amp * Math.sin(p * twoPi);
+          shape.y(base.y + dy);
+          break;
+        }
+
+        case 'shake': {
+          const amp = 6; // px a los lados
+          const dx = amp * Math.sin(p * twoPi * 4); // más rápido
+          shape.x(base.x + dx);
+          break;
+        }
+
+        case 'flash': {
+          const v = 0.5 + 0.5 * Math.sin(p * twoPi * 2); // 0..1
+          shape.opacity(base.opacity * v);
+          break;
+        }
+
+        default:
+          break;
+      }
+    }, layer);
+
+    shape._baseAnimation = anim;
+    anim.start();
   },
 
-  // --------- Guardar overlay ---------
-  async saveCurrent() {
-    if (!this.currentOverlay) return;
+  // --------- Aplicar cambios de inputs a los shapes ---------
+  onPropChange(prop, rawValue) {
+    const nodes = this.transformer?.nodes?.() || [];
+    if (!nodes.length) return;
 
-    // Aseguramos que canvas tenga datos
-    this.currentOverlay.canvas = this.currentOverlay.canvas || {
-      width: this.stage.width(),
-      height: this.stage.height(),
-      background: 'transparent'
-    };
+    const value = rawValue;
 
-    const res = await fetch('/api/overlays', {
-      method: 'POST', // o PUT según tu API
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(this.currentOverlay)
+    nodes.forEach(shape => {
+      let m = shape.meta || shape._meta;
+      if (!m) return;
+
+      // Normalizar meta en la shape
+      shape.meta = m;
+      shape._meta = m;
+
+      // Soportar rect antiguos sin type usando la clase de Konva
+      const isRect = m.type === 'rect' || shape.getClassName?.() === 'Rect';
+
+      switch (prop) {
+        case 'name':
+          m.name = value;
+          if (m.type === 'text') {
+            m.text = value;
+            shape.text(value);
+          }
+          this.renderLayersTree();
+          break;
+
+        case 'x': {
+          const v = parseInt(value || '0', 10) || 0;
+          m.x = v;
+          shape.x(v);
+          break;
+        }
+
+        case 'y': {
+          const v = parseInt(value || '0', 10) || 0;
+          m.y = v;
+          shape.y(v);
+          break;
+        }
+
+        case 'opacity': {
+          const v = Math.max(0, Math.min(100, parseInt(value || '0', 10)));
+          m.opacity = v;
+          shape.opacity(v / 100);
+          break;
+        }
+
+// -------- FONDO (color + alpha) --------
+case 'bgColor': {
+  // Guardar siempre en meta, sea imagen, texto o rect
+  m.baseBgColor = value || '#000000';
+  const alpha = typeof m.bgAlpha === 'number' ? m.bgAlpha : 100;
+  const rgba = this.makeRgba(m.baseBgColor, alpha / 100);
+  m.backgroundColor = rgba;
+
+  // Solo los rectángulos usan fill como “fondo”
+  if (m.type === 'rect' || shape.getClassName?.() === 'Rect') {
+    shape.fill(rgba);
+  }
+  break;
+}
+
+case 'bgAlpha': {
+  const v = Math.max(0, Math.min(100, parseInt(value || '100', 10)));
+  m.bgAlpha = v;
+  const base = m.baseBgColor || '#000000';
+  const rgba = this.makeRgba(base, v / 100);
+  m.backgroundColor = rgba;
+
+  if (m.type === 'rect' || shape.getClassName?.() === 'Rect') {
+    shape.fill(rgba);
+  }
+  break;
+}
+
+// -------- BORDE (color + alpha + grosor) --------
+case 'borderColor': {
+  m.baseBorderColor = value || '#06b6d4';
+  const alpha = typeof m.borderAlpha === 'number' ? m.borderAlpha : 100;
+  const rgba = this.makeRgba(m.baseBorderColor, alpha / 100);
+  m.borderColor = rgba;
+
+  // Konva.Text y Konva.Image también soportan stroke
+  if (shape.stroke) {
+    shape.stroke(rgba);
+  }
+  break;
+}
+
+case 'borderAlpha': {
+  const v = Math.max(0, Math.min(100, parseInt(value || '100', 10)));
+  m.borderAlpha = v;
+  const base = m.baseBorderColor || '#06b6d4';
+  const rgba = this.makeRgba(base, v / 100);
+  m.borderColor = rgba;
+
+  if (shape.stroke) {
+    shape.stroke(rgba);
+  }
+  break;
+}
+
+case 'borderWidth': {
+  const v = Math.max(0, parseInt(value || '0', 10));
+  m.borderWidth = v;
+
+  if (shape.strokeWidth) {
+    shape.strokeWidth(v);
+  }
+  break;
+}
+
+
+
+        // -------- TEXTO --------
+        case 'text':
+          if (m.type === 'text') {
+            m.text = value;
+            shape.text(value);
+          }
+          break;
+
+        case 'fontFamily':
+          if (m.type === 'text') {
+            m.fontFamily = value;
+            shape.fontFamily(value);
+          }
+          break;
+
+        case 'fontSize': {
+          if (m.type === 'text') {
+            const v = Math.max(8, parseInt(value || '8', 10));
+            m.fontSize = v;
+            shape.fontSize(v);
+          }
+          break;
+        }
+
+        case 'textColor':
+          if (m.type === 'text') {
+            m.baseTextColor = value || '#ffffff';
+            const tAlpha = typeof m.textAlpha === 'number' ? m.textAlpha : 100;
+            const rgba = this.makeRgba(m.baseTextColor, tAlpha / 100);
+            m.color = rgba;
+            shape.fill(rgba);
+          }
+          break;
+
+        case 'textAlpha':
+          if (m.type === 'text') {
+            const v = Math.max(0, Math.min(100, parseInt(value || '100', 10)));
+            m.textAlpha = v;
+            const base = m.baseTextColor || '#ffffff';
+            const rgba = this.makeRgba(base, v / 100);
+            m.color = rgba;
+            shape.fill(rgba);
+          }
+          break;
+
+        // -------- ANIMACIÓN --------
+        case 'animation':
+          m.animationBase = value || '';
+          if (this.applyBaseAnimation) this.applyBaseAnimation(shape);
+          break;
+
+        case 'animDuration': {
+          const v = parseFloat(value || '3') || 3;
+          m.animationDurationSec = v;
+          if (this.applyBaseAnimation) this.applyBaseAnimation(shape);
+          break;
+        }
+
+        case 'trigger':
+          m.trigger = value || '';
+          break;
+
+        default:
+          break;
+      }
     });
 
-    if (!res.ok) {
-      alert('Error guardando overlay');
-      return;
-    }
-    alert('Overlay guardado');
-    this.loadOverlays();
+    if (this.layer) this.layer.draw();
+    this.pushHistory?.();
   },
+
+
+
+
+
+
+  // --------- Guardar overlay ---------
+async saveCurrent() {
+  if (!this.currentOverlay || !this.stage) return;
+
+  // Asegura que tenga id
+  if (!this.currentOverlay.id) {
+    this.currentOverlay.id = crypto.randomUUID();
+  }
+
+  // Canvas info
+  this.currentOverlay.canvas = {
+    width: this.stage.width(),
+    height: this.stage.height(),
+    background: 'transparent',
+  };
+
+  // Preview pequeña
+  try {
+    const preview = this.stage.toDataURL({ pixelRatio: 0.2 });
+    this.currentOverlay.preview = preview;
+  } catch (e) {
+    console.error('No se pudo generar preview', e);
+  }
+
+  const res = await fetch('/api/overlays', {
+    method: 'POST',                         // SIEMPRE POST
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(this.currentOverlay),
+  });
+
+  if (!res.ok) {
+    console.error('Error guardando overlay', await res.text());
+    alert('Error guardando overlay');
+    return;
+  }
+
+  const data = await res.json();
+  this.currentOverlay = data.overlay;       // por si el server normaliza algo
+
+  alert('Overlay guardado');
+  this.loadOverlays();
+},
+
 
   snapshotState() {
     if (!this.currentOverlay) return null;
@@ -1405,6 +1934,67 @@ shape.on('dragmove', () => {
     this.restoreHistoryStep(this.historyIndex);
   },
 
+  makePropertiesPanelDraggable() {
+    const panel = document.getElementById('propertiesPanel');
+    if (!panel) return;
+    const header = panel.querySelector('.prop-header');
+    if (!header) return;
+
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let startLeft = 0;
+    let startTop = 0;
+
+    // Aseguramos usar left/top en vez de right
+    panel.style.left = panel.style.left || 'calc(100% - 520px)';
+    panel.style.right = 'auto';
+
+    const onMouseDown = (e) => {
+      isDragging = true;
+      panel.classList.add('dragging');
+
+      const rect = panel.getBoundingClientRect();
+      startX = e.clientX;
+      startY = e.clientY;
+      startLeft = rect.left;
+      startTop = rect.top;
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    };
+
+    const onMouseMove = (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      let newLeft = startLeft + dx;
+      let newTop = startTop + dy;
+
+      // Clamps básicos dentro de la ventana
+      const maxX = window.innerWidth - panel.offsetWidth;
+      const maxY = window.innerHeight - panel.offsetHeight;
+      if (newLeft < 0) newLeft = 0;
+      if (newTop < 0) newTop = 0;
+      if (newLeft > maxX) newLeft = maxX;
+      if (newTop > maxY) newTop = maxY;
+
+      panel.style.left = `${newLeft}px`;
+      panel.style.top = `${newTop}px`;
+    };
+
+    const onMouseUp = () => {
+      isDragging = false;
+      panel.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    header.addEventListener('mousedown', onMouseDown);
+  },
+
+
 
   setupUIHooks() {
     window.overlayApp = this;
@@ -1419,6 +2009,10 @@ shape.on('dragmove', () => {
     if (btnText) {
       btnText.onclick = () => this.addTextElement();
     }
+
+      const btnRect = document.querySelector('button[data-tool="rect"]');
+  if (btnRect) btnRect.onclick = this.addRectElement.bind(this);
+
 
 
     // Slider de zoom -> cartulina (canvasWorld)
@@ -1580,6 +2174,8 @@ shape.on('dragmove', () => {
     if (inputY) inputY.onchange = e => this.onPropChange('y', e.target.value);
     if (inputRot) inputRot.onchange = e => this.onPropChange('rotation', e.target.value);
     if (inputOp) inputOp.oninput = e => this.onPropChange('opacity', e.target.value);
+
+    this.makePropertiesPanelDraggable();
   },
 
 
@@ -1649,6 +2245,7 @@ shape.on('dragmove', () => {
     this.layer && this.layer.draw();
     this.pushHistory();
   },
+
   addTextElement() {
     if (!this.currentOverlay) return;
 
@@ -1691,6 +2288,65 @@ shape.on('dragmove', () => {
     this.layer.draw();
     this.pushHistory && this.pushHistory();
   },
+
+addRectElement() {
+  if (!this.currentOverlay || !this.layer) return;
+
+  // 1) Crear meta en el JSON
+  const el = {
+    id: crypto.randomUUID(),
+    type: 'rect',
+    name: 'Rectángulo',
+    x: 200,
+    y: 200,
+    width: 300,
+    height: 150,
+    // Fondo transparente por defecto
+    baseBgColor: '#000000',
+    bgAlpha: 0,
+    backgroundColor: 'rgba(0,0,0,0)',
+    // Borde cian por defecto
+    baseBorderColor: '#06b6d4',
+    borderAlpha: 100,
+    borderColor: 'rgba(6,182,212,1)',
+    borderWidth: 4,
+    opacity: 100,
+    rotation: 0,
+    zIndex: this.currentOverlay.elements.length + 1,
+  };
+
+  this.currentOverlay.elements.push(el);
+
+  // 2) Crear el Konva.Rect correspondiente
+  const rect = new Konva.Rect({
+    x: el.x,
+    y: el.y,
+    width: el.width,
+    height: el.height,
+    fill: el.backgroundColor,
+    stroke: el.borderColor,
+    strokeWidth: el.borderWidth,
+    opacity: (el.opacity ?? 100) / 100,
+    rotation: el.rotation || 0,
+  });
+
+  rect.meta = el;
+
+  this.makeDraggable(rect);
+  this.layer.add(rect);
+
+  // 3) Seleccionarlo y abrir sus props
+  this.selectedElementId = el.id;
+  if (this.transformer) {
+    this.transformer.nodes([rect]);
+  }
+
+  this.updatePropertiesPanel(rect);
+  this.renderLayersTree();
+  this.layer.draw();
+  this.pushHistory?.();
+},
+
 
   reorderElements(newOrder) {
     const elements = this.currentOverlay.elements;
@@ -1818,41 +2474,41 @@ shape.on('dragmove', () => {
     this.pushHistory && this.pushHistory();
   },
 
-  groupSelected() {
-    if (!this.currentOverlay || !this.transformer) return;
+groupSelected() {
+  if (!this.currentOverlay || !this.transformer) return;
+  const nodes = this.transformer.nodes();
+  if (!nodes.length) return;
 
-    const nodes = this.transformer.nodes() || [];
-    if (!nodes.length) return;
+  const ids = nodes.map(n => n.meta?.id).filter(Boolean);
+  if (!ids.length) return;
 
-    const ids = nodes
-      .map(n => n._meta?.id)
-      .filter(Boolean);
+  if (!Array.isArray(this.currentOverlay.groups)) {
+    this.currentOverlay.groups = [];
+  }
 
-    if (!ids.length) return;
+  // 1) Sacar estos ids de cualquier grupo previo
+  this.currentOverlay.groups.forEach(g => {
+    g.children = g.children.filter(id => !ids.includes(id));
+  });
 
-    // Asegurar estructura de grupos
-    if (!Array.isArray(this.currentOverlay.groups)) {
-      this.currentOverlay.groups = [];
-    }
+  // 2) Eliminar grupos que se hayan quedado vacíos
+  this.currentOverlay.groups = this.currentOverlay.groups.filter(
+    g => Array.isArray(g.children) && g.children.length > 0
+  );
 
-    // Sacar estos ids de cualquier grupo previo
-    this.currentOverlay.groups.forEach(g => {
-      g.children = (g.children || []).filter(id => !ids.includes(id));
-    });
+  // 3) Crear grupo NUEVO con la selección actual
+  const index = this.currentOverlay.groups.length + 1;
+  const group = {
+    id: 'grp-' + crypto.randomUUID(),
+    name: 'Grupo ' + index,
+    children: ids,
+  };
+  this.currentOverlay.groups.push(group);
 
-    // Crear grupo NUEVO con la selección actual
-    const index = this.currentOverlay.groups.length + 1;
-    const group = {
-      id: 'grp_' + crypto.randomUUID(),
-      name: 'Grupo ' + index,
-      children: ids
-    };
+  this.renderLayersTree();
+  this.pushHistory?.();
+},
 
-    this.currentOverlay.groups.push(group);
-
-    this.renderLayersTree();
-    this.pushHistory && this.pushHistory();
-  },
 
 
   ungroup() {
@@ -1886,54 +2542,104 @@ shape.on('dragmove', () => {
   },
 
 
-renameGroup(groupId) {
-  if (!this.currentOverlay?.groups) return;
+  renameGroup(groupId) {
+    if (!this.currentOverlay?.groups) return;
 
-  const group = this.currentOverlay.groups.find(g => g.id === groupId);
-  if (!group) return;
+    const group = this.currentOverlay.groups.find(g => g.id === groupId);
+    if (!group) return;
 
-  const current = group.name || 'Grupo';
-  const newName = prompt('Nombre del grupo', current);
-  if (!newName || newName === current) return;
+    const current = group.name || 'Grupo';
+    const newName = prompt('Nombre del grupo', current);
+    if (!newName || newName === current) return;
 
-  group.name = newName;
-  this.renderLayersTree();
-  this.pushHistory && this.pushHistory();
-},
+    group.name = newName;
+    this.renderLayersTree();
+    this.pushHistory && this.pushHistory();
+  },
 
-renameLayer(id) {
-  if (!this.currentOverlay) return;
+  renameLayer(id) {
+    if (!this.currentOverlay) return;
 
-  const el = this.currentOverlay.elements.find(e => e.id === id);
-  if (!el) return;
+    const el = this.currentOverlay.elements.find(e => e.id === id);
+    if (!el) return;
 
-  // Nombre actual que se muestra
-  const current =
-    el.name ||
-    (el.type === 'text'
-      ? (el.text || '')
-      : '');
+    // Nombre actual que se muestra
+    const current =
+      el.name ||
+      (el.type === 'text'
+        ? (el.text || '')
+        : '');
 
-  const newName = prompt('Nombre de la capa', current);
-  if (!newName || newName === current) return;
+    const newName = prompt('Nombre de la capa', current);
+    if (!newName || newName === current) return;
 
-  if (el.type === 'text') {
-    // Para textos usamos el contenido como "nombre"
-    el.text = newName;
-    // Actualizar Konva.Text si está en el Stage
-    const shape = this.findShapeByElementId(id);
-    if (shape) {
-      shape.text(newName);
-      this.layer && this.layer.draw();
+    if (el.type === 'text') {
+      // Para textos usamos el contenido como "nombre"
+      el.text = newName;
+      // Actualizar Konva.Text si está en el Stage
+      const shape = this.findShapeByElementId(id);
+      if (shape) {
+        shape.text(newName);
+        this.layer && this.layer.draw();
+      }
+    } else {
+      // Para imágenes / rectángulos usamos el campo name
+      el.name = newName;
     }
-  } else {
-    // Para imágenes / rectángulos usamos el campo name
-    el.name = newName;
-  }
 
-  this.renderLayersTree();
-  this.pushHistory && this.pushHistory();
-},
+    this.renderLayersTree();
+    this.pushHistory && this.pushHistory();
+  },
+
+  closeProperties() {
+    const panel = document.getElementById('propertiesPanel');
+    if (panel) panel.style.display = 'none';
+
+    const empty = document.getElementById('props-empty');
+    const elSec = document.getElementById('props-element');
+    const grpSec = document.getElementById('props-group');
+
+    if (empty) empty.style.display = 'block';
+    if (elSec) elSec.style.display = 'none';
+    if (grpSec) grpSec.style.display = 'none';
+  },
+
+
+
+  updateSelected(prop, value) {
+    const nodes = this.transformer.nodes();
+    if (!nodes.length) return;
+
+    // Si hay grupo seleccionado (selectedGroupId), actuamos sobre el grupo
+    if (this.selectedGroupId && (!this.selectedElementId || nodes.length > 1)) {
+      const group = this.currentOverlay.groups.find(g => g.id === this.selectedGroupId);
+      if (!group) return;
+      group.runtime = group.runtime || {};
+      group.runtime.onActionExecute = group.runtime.onActionExecute || {};
+
+      if (prop === 'animation') {
+        group.runtime.onActionExecute.animationOnAction = value || '';
+      } else if (prop === 'trigger') {
+        group.runtime.onActionExecute.trigger = value || '';
+      }
+      // ... (otros props de grupo si quieres)
+      this.pushHistory && this.pushHistory();
+      return;
+    }
+
+    // Si no, es una capa normal
+    const m = nodes[0]._meta;
+    if (!m) return;
+
+    if (prop === 'animation') {
+      m.animationBase = value || '';
+    } else if (prop === 'trigger') {
+      m.trigger = value || '';
+    }
+    // resto de props (x, y, opacity, etc.) como ya lo tienes
+    this.layer.draw();
+    this.pushHistory && this.pushHistory();
+  },
 
 
 
